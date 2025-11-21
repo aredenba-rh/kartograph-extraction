@@ -1,0 +1,8 @@
+name: rosa-kcs
+description: ROSA Knowledge Centered Service solutions
+git_url: https://github.com/aredenba-rh/rosa-kcs
+credential_env_var: ROSA_KCS_GIT_TOKEN  # Optional: GitHub token for private repo
+branch: main
+sparse_paths:
+  - kcs_solutions/
+

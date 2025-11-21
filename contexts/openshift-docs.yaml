@@ -1,0 +1,35 @@
+name: openshift-docs
+description: OpenShift documentation - ROSA, OSD, and HCP content
+git_url: https://github.com/openshift/openshift-docs
+credential_env_var: null  # Public repo, no credentials needed
+branch: main
+sparse_paths:
+  # Content directories (CRITICAL - contain the actual documentation text)
+  - modules/
+  - _attributes/
+  - snippets/
+  
+  # ROSA directories (9 total)
+  - rosa_architecture/
+  - rosa_cluster_admin/
+  - rosa_getting_started/
+  - rosa_hcp/
+  - rosa_install_access_delete_clusters/
+  - rosa_planning/
+  - rosa_quick_start/
+  - rosa_release_notes/
+  - rosa_learning/
+  
+  # OSD directories (8 total)
+  - osd_architecture/
+  - osd_aws_clusters/
+  - osd_cluster_admin/
+  - osd_gcp_clusters/
+  - osd_getting_started/
+  - osd_planning/
+  - osd_whats_new/
+  - cloud_experts_osd_tutorials/
+  
+  # HCP directories
+  - hosted_control_planes/
+
