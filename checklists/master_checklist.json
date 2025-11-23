@@ -1,0 +1,19 @@
+{
+  "checklist_id": "master_checklist",
+  "title": "KGaaS Extraction Master Checklist",
+  "description": "Top-level checklist for the entire knowledge graph extraction workflow",
+  "items": [
+    {
+      "item_id": "step_01",
+      "description": "Create file partition",
+      "completed": false,
+      "sub_checklist": "01_create_file_partition.json"
+    },
+    {
+      "item_id": "step_02",
+      "description": "Preprocess each partition (validate ontologies and prepare for extraction)",
+      "completed": false,
+      "sub_checklist": "02_preprocess_each_partition.json"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "partition_id": "example_partition",
+  "title": "Example partition demonstrating the structure (not a real partition)",
+  "description": "This is an example partition file showing the expected JSON structure. Real partitions should group similar files from data/ folder based on content patterns and logical relationships.",
+  "paths": [
+    "data/rosa-kcs/kcs_solutions/5609901-red-hat-openshift-service-on-aws-(rosa)-pre-ga-support.md",
+    "data/rosa-kcs/kcs_solutions/5795441-cloud-credentials-insufficient-to-satisfy-credentialsrequest-on-aws-rhocp-4.md"
+  ],
+  "entity_ontology": [
+    {
+      "type": "AWSService",
+      "example_files": [
+        "data/rosa-kcs/kcs_solutions/5795441-cloud-credentials-insufficient-to-satisfy-credentialsrequest-on-aws-rhocp-4.md"
+      ],
+      "example_files_description": "References to AWS services like S3, IAM, EC2 that integrate with ROSA clusters. These are cloud infrastructure components that ROSA depends on."
+    },
+    {
+      "type": "KnowledgeBaseArticle",
+      "example_files": [
+        "data/rosa-kcs/kcs_solutions/5609901-red-hat-openshift-service-on-aws-(rosa)-pre-ga-support.md"
+      ],
+      "example_files_description": "KCS solution articles that document troubleshooting steps, configurations, and best practices for ROSA."
+    }
+  ],
+  "relationship_ontology": [
+    {
+      "type": "DOCUMENTS",
+      "example_files": [
+        "data/rosa-kcs/kcs_solutions/5609901-red-hat-openshift-service-on-aws-(rosa)-pre-ga-support.md",
+        "data/rosa-kcs/kcs_solutions/5609901-red-hat-openshift-service-on-aws-(rosa)-pre-ga-support.md"
+      ],
+      "example_files_description": "KnowledgeBaseArticle entities document various AWS services and ROSA configurations. This relationship captures how documentation relates to technical concepts."
+    },
+    {
+      "type": "REQUIRES",
+      "example_files": [
+        "data/rosa-kcs/kcs_solutions/5795441-cloud-credentials-insufficient-to-satisfy-credentialsrequest-on-aws-rhocp-4.md",
+        "data/rosa-kcs/kcs_solutions/5795441-cloud-credentials-insufficient-to-satisfy-credentialsrequest-on-aws-rhocp-4.md"
+      ],
+      "example_files_description": "ROSA clusters require specific AWS credentials and permissions. This relationship captures dependency requirements between system components."
+    }
+  ]
+}
