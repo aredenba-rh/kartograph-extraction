@@ -1,4 +1,4 @@
-.PHONY: help clean fetch-openshift-docs fetch-rosa-kcs fetch-all list-data install-deps \
+.PHONY: help clean fetch-openshift-docs fetch-rosa-kcs fetch-ops-sop fetch-all list-data install-deps \
 	validate-partitions check-ontology update-ontology view-checklist check-item \
 	generate-preprocessing start-extraction demo-tools
 
@@ -10,11 +10,13 @@ help:
 	@echo "  make install-deps        - Install Python dependencies"
 	@echo "  make fetch-openshift-docs - Fetch OpenShift documentation"
 	@echo "  make fetch-rosa-kcs      - Fetch ROSA KCS solutions (requires credentials)"
+	@echo "  make fetch-ops-sop       - Fetch OpenShift Ops SOP (requires credentials)"
 	@echo "  make fetch-all           - Fetch all data sources"
 	@echo "  make list-data           - List all downloaded data"
 	@echo "  make clean               - Remove all downloaded data"
 	@echo "  make clean-openshift     - Remove OpenShift docs only"
 	@echo "  make clean-rosa-kcs      - Remove ROSA KCS only"
+	@echo "  make clean-ops-sop       - Remove Ops SOP only"
 	@echo ""
 	@echo "=== KG Extraction Workflow ==="
 	@echo "  make start-extraction    - Start the KG extraction workflow (Step 1: Partition + Ontology)"
@@ -53,8 +55,19 @@ fetch-rosa-kcs:
 	@echo "Fetching ROSA KCS solutions..."
 	python3 contexts/get_data_source.py contexts/rosa-kcs.yaml
 
+# Fetch OpenShift Ops SOP (requires credentials)
+fetch-ops-sop:
+	@if [ -z "$$ROSA_KCS_GIT_TOKEN" ]; then \
+		echo "Error: ROSA_KCS_GIT_TOKEN environment variable not set"; \
+		echo "Please set it in your .env file or export it:"; \
+		echo "  export ROSA_KCS_GIT_TOKEN=your_token_here"; \
+		exit 1; \
+	fi
+	@echo "Fetching OpenShift Ops SOP..."
+	python3 contexts/get_data_source.py contexts/ops-sop.yaml
+
 # Fetch all data sources
-fetch-all: fetch-openshift-docs fetch-rosa-kcs
+fetch-all: fetch-openshift-docs fetch-rosa-kcs fetch-ops-sop
 
 # List contents of data directory
 list-data:
@@ -84,6 +97,11 @@ clean-rosa-kcs:
 	@echo "Removing ROSA KCS..."
 	rm -rf data/rosa-kcs/
 	@echo "✓ Cleaned ROSA KCS"
+
+clean-ops-sop:
+	@echo "Removing Ops SOP..."
+	rm -rf data/ops-sop/
+	@echo "✓ Cleaned Ops SOP"
 
 # Quick switch between data sources
 switch-to-openshift: clean-rosa-kcs fetch-openshift-docs

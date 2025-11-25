@@ -1,0 +1,8 @@
+name: ops-sop
+description: OpenShift Operations Standard Operating Procedures
+git_url: https://github.com/openshift/ops-sop
+credential_env_var: ROSA_KCS_GIT_TOKEN  # Uses same GitHub token as KCS
+branch: master
+sparse_paths:
+  - /*  # Fetch entire repository (can be refined later with specific paths)
+

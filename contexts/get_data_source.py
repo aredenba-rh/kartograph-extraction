@@ -17,6 +17,8 @@ from typing import Optional
 
 import yaml
 
+from dotenv import load_dotenv
+load_dotenv()
 
 class DataSourceFetcher:
     """Handles sparse checkout of git repositories based on YAML configuration."""
