@@ -1,0 +1,18 @@
+{
+  "checklist_id": "01_create_file_partitions",
+  "title": "Create File Partitions",
+  "description": "Steps to create a disjoint partition of files in the data/ folder",
+  "items": [
+    {
+      "item_id": "1.1",
+      "description": "Analyze data/ folder structure, identify logical groupings, and create partition JSON files with titles and descriptions",
+      "completed": false
+    },
+    {
+      "item_id": "1.2",
+      "description": "Validate partition coverage using confirm_acceptable_partition script",
+      "completed": false
+    }
+  ]
+}
+

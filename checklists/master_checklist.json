@@ -5,15 +5,15 @@
   "items": [
     {
       "item_id": "step_01",
-      "description": "Create file partition",
+      "description": "Create file partitions",
       "completed": false,
-      "sub_checklist": "01_create_file_partition.json"
+      "sub_checklist": "01_create_file_partitions.json"
     },
     {
       "item_id": "step_02",
-      "description": "Preprocess each partition (validate ontologies and prepare for extraction)",
+      "description": "Create ontologies for each partition",
       "completed": false,
-      "sub_checklist": "02_preprocess_each_partition.json"
+      "sub_checklist": "02_create_ontologies_for_each_partition.json"
     }
   ]
 }

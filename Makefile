@@ -1,6 +1,6 @@
 .PHONY: help clean fetch-openshift-docs fetch-rosa-kcs fetch-ops-sop fetch-all list-data install-deps \
 	validate-partitions check-ontology update-ontology view-checklist check-item \
-	generate-preprocessing start-extraction demo-tools
+	generate-preprocessing start-extraction extraction-preview toggle-use-current-partition
 
 # Default target
 help:
@@ -19,12 +19,14 @@ help:
 	@echo "  make clean-ops-sop       - Remove Ops SOP only"
 	@echo ""
 	@echo "=== KG Extraction Workflow ==="
-	@echo "  make start-extraction    - Start the KG extraction workflow (Step 1: Partition + Ontology)"
+	@echo "  make extraction-preview  - Preview data, flags, and checklist status"
+	@echo "  make start-extraction    - Start the KG extraction workflow"
 	@echo "  make validate-partitions - Validate partition coverage"
 	@echo "  make view-checklist      - View master checklist (use CHECKLIST=<id> for specific)"
 	@echo "  make check-item          - Check off checklist item (CHECKLIST=<id> ITEM=<item_id>)"
-	@echo "  make generate-preprocessing - Generate preprocessing checklist from partitions"
-	@echo "  make demo-tools          - Demo the agent tools"
+	@echo ""
+	@echo "=== Extraction Flags ==="
+	@echo "  make toggle-use-current-partition - Skip partition creation, use existing partitions"
 	@echo ""
 	@echo "=== Ontology Management ==="
 	@echo "  make check-ontology      - Check if ontology element exists (TYPE=<type> DESC=<desc> ONT=entity|relationship)"
@@ -114,34 +116,17 @@ switch-to-rosa: clean-openshift fetch-rosa-kcs
 # KG Extraction Workflow Targets
 # ============================================================================
 
+# Preview extraction status
+extraction-preview:
+	@python3 scripts/extraction_preview.py
+
 # Start the KG extraction workflow
 start-extraction:
 	@echo "╔════════════════════════════════════════════════════════════╗"
-	@echo "║  KGaaS Extraction Workflow - Step 1: Partition + Ontology  ║"
+	@echo "║         KGaaS Extraction Workflow - Starting...            ║"
 	@echo "╚════════════════════════════════════════════════════════════╝"
 	@echo ""
-	@echo "This workflow will guide you through:"
-	@echo "  1. Creating a disjoint partition of files in data/"
-	@echo "  2. Defining entity and relationship ontologies for each partition"
-	@echo "  3. Building master ontologies across all partitions"
-	@echo ""
-	@echo "Available tools for the agent:"
-	@echo "  - confirm_acceptable_partition.py - Validate partition coverage"
-	@echo "  - check_master_ontology.py        - Check for similar ontology elements"
-	@echo "  - update_master_ontology.py       - Update master ontologies"
-	@echo "  - manage_checklist.py             - Track progress"
-	@echo "  - agent_tools.py                  - Python API for all tools"
-	@echo ""
-	@echo "Current status:"
-	@python3 scripts/manage_checklist.py view master_checklist
-	@echo ""
-	@echo "Next steps:"
-	@echo "  1. Use Claude Agent SDK to analyze data/ folder"
-	@echo "  2. Create partitions in partitions/ directory"
-	@echo "  3. Run 'make validate-partitions' to check coverage"
-	@echo "  4. Define ontologies for each partition"
-	@echo "  5. Use checklist system to track progress"
-	@echo ""
+	@python3 scripts/start_extraction_workflow.py
 
 # Validate that partitions cover all files
 validate-partitions:
@@ -161,9 +146,9 @@ check-item:
 	fi
 	@python3 scripts/manage_checklist.py check $(CHECKLIST) $(ITEM)
 
-# Generate preprocessing checklist
-generate-preprocessing:
-	@python3 scripts/manage_checklist.py generate-preprocessing
+# Toggle flags
+toggle-use-current-partition:
+	@python3 scripts/toggle_flag.py use_current_partition
 
 # Check ontology element
 check-ontology:
@@ -182,8 +167,3 @@ update-ontology:
 		exit 1; \
 	fi
 	@python3 scripts/update_master_ontology.py $(PARTITION) $(or $(ONT),both)
-
-# Demo the agent tools
-demo-tools:
-	@python3 scripts/agent_tools.py
-

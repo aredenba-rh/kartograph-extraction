@@ -1,0 +1,28 @@
+{
+  "checklist_id": "02_create_ontologies_for_each_partition",
+  "title": "Create Ontologies for Each Partition",
+  "description": "Define entity and relationship ontologies for each partition and update master ontologies",
+  "items": [
+    {
+      "item_id": "2.1",
+      "description": "Create entity ontology for each partition",
+      "completed": false
+    },
+    {
+      "item_id": "2.2",
+      "description": "Create relationship ontology for each partition",
+      "completed": false
+    },
+    {
+      "item_id": "2.3",
+      "description": "Update master entity ontology",
+      "completed": false
+    },
+    {
+      "item_id": "2.4",
+      "description": "Update master relationship ontology",
+      "completed": false
+    }
+  ]
+}
+

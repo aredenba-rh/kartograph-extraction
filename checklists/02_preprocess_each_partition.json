@@ -1,6 +1,0 @@
-{
-  "checklist_id": "02_preprocess_each_partition",
-  "title": "Preprocess Each Partition",
-  "description": "Per-file preprocessing checklist - will be populated dynamically based on partition files",
-  "items": []
-}
