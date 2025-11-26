@@ -26,7 +26,8 @@ help:
 	@echo "  make check-item          - Check off checklist item (CHECKLIST=<id> ITEM=<item_id>)"
 	@echo ""
 	@echo "=== Extraction Flags ==="
-	@echo "  make toggle-use-current-partition - Skip partition creation, use existing partitions"
+	@echo "  make toggle-use-current-partition  - Skip partition creation, use existing partitions"
+	@echo "  make toggle-use-current-ontologies - Skip ontology creation, use existing ontologies"
 	@echo ""
 	@echo "=== Ontology Management ==="
 	@echo "  make check-ontology      - Check if ontology element exists (TYPE=<type> DESC=<desc> ONT=entity|relationship)"
@@ -149,6 +150,9 @@ check-item:
 # Toggle flags
 toggle-use-current-partition:
 	@python3 scripts/toggle_flag.py use_current_partition
+
+toggle-use-current-ontologies:
+	@python3 scripts/toggle_flag.py use_current_ontologies
 
 # Check ontology element
 check-ontology:

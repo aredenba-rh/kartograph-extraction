@@ -52,7 +52,10 @@ def show_flags():
     
     if not config_file.exists():
         print("  ⚠️  No extraction_config.json found. Creating default...")
-        default_config = {"use_current_partition": False}
+        default_config = {
+            "use_current_partition": False,
+            "use_current_ontologies": False
+        }
         with open(config_file, 'w') as f:
             json.dump(default_config, f, indent=2)
         config = default_config
@@ -65,7 +68,8 @@ def show_flags():
     
     # Flag display names with descriptions
     flag_names = {
-        "use_current_partition": "use_current_partition (Skip 01)"
+        "use_current_partition": "use_current_partition (Skip 01)",
+        "use_current_ontologies": "use_current_ontologies (Skip 02)"
     }
     
     for key, value in config.items():
