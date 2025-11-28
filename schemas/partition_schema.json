@@ -6,8 +6,8 @@
   "required": ["partition_id", "title", "description", "paths", "entity_ontology", "relationship_ontology"],
   "properties": {
     "partition_id": {
-      "type": "string",
-      "description": "Unique identifier for this partition (e.g., 'partition_01')"
+      "type": "integer",
+      "description": "Unique auto-incrementing integer identifier for this partition (e.g., 1, 2, 3)"
     },
     "title": {
       "type": "string",

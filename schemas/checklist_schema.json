@@ -42,6 +42,13 @@
           "type": "boolean",
           "description": "Whether this item has been completed"
         },
+        "available_tools": {
+          "type": "array",
+          "description": "Optional list of script names (without .py extension) available to Claude during this step",
+          "items": {
+            "type": "string"
+          }
+        },
         "sub_checklist": {
           "type": "string",
           "description": "Optional reference to another checklist file (e.g., '02_preprocess_each_partition.json')"

@@ -6,13 +6,14 @@
     {
       "item_id": "1.1",
       "description": "Analyze data/ folder structure, identify logical groupings, and create partition JSON files with titles and descriptions",
-      "completed": false
+      "completed": false,
+      "available_tools": ["create_partition"]
     },
     {
       "item_id": "1.2",
       "description": "Validate partition coverage using confirm_acceptable_partition script",
-      "completed": false
+      "completed": false,
+      "available_tools": ["confirm_acceptable_partition"]
     }
   ]
 }
-

@@ -1,6 +1,7 @@
 .PHONY: help clean fetch-openshift-docs fetch-rosa-kcs fetch-ops-sop fetch-all list-data install-deps \
 	validate-partitions check-ontology update-ontology view-checklist check-item \
-	generate-preprocessing start-extraction extraction-preview toggle-use-current-partition
+	generate-preprocessing start-extraction extraction-preview toggle-use-current-partition \
+	create-partition list-partitions clean-partitions view-examples
 
 # Default target
 help:
@@ -20,10 +21,16 @@ help:
 	@echo ""
 	@echo "=== KG Extraction Workflow ==="
 	@echo "  make extraction-preview  - Preview data, flags, and checklist status"
-	@echo "  make start-extraction    - Start the KG extraction workflow"
+	@echo "  make start-extraction    - Start the KG extraction workflow (with Claude SDK)"
 	@echo "  make validate-partitions - Validate partition coverage"
 	@echo "  make view-checklist      - View master checklist (use CHECKLIST=<id> for specific)"
 	@echo "  make check-item          - Check off checklist item (CHECKLIST=<id> ITEM=<item_id>)"
+	@echo ""
+	@echo "=== Partition Management ==="
+	@echo "  make create-partition    - Create a new partition (TITLE='...' DESC='...' PATHS='path1 path2')"
+	@echo "  make list-partitions     - List all existing partitions"
+	@echo "  make clean-partitions    - Remove all partition files"
+	@echo "  make view-examples       - View example partition structure"
 	@echo ""
 	@echo "=== Extraction Flags ==="
 	@echo "  make toggle-use-current-partition  - Skip partition creation, use existing partitions"
@@ -40,7 +47,7 @@ help:
 # Install Python dependencies
 install-deps:
 	@echo "Installing Python dependencies..."
-	pip install pyyaml
+	pip install -r requirements.txt
 
 # Fetch OpenShift documentation (public repo)
 fetch-openshift-docs:
@@ -171,3 +178,40 @@ update-ontology:
 		exit 1; \
 	fi
 	@python3 scripts/update_master_ontology.py $(PARTITION) $(or $(ONT),both)
+
+# ============================================================================
+# Partition Management Targets
+# ============================================================================
+
+# Create a new partition manually
+create-partition:
+	@if [ -z "$(TITLE)" ] || [ -z "$(DESC)" ] || [ -z "$(PATHS)" ]; then \
+		echo "Usage: make create-partition TITLE='...' DESC='...' PATHS='path1 path2 ...'"; \
+		echo "Example: make create-partition TITLE='AWS Docs' DESC='AWS integration files' PATHS='data/rosa-kcs/aws/'"; \
+		exit 1; \
+	fi
+	@python3 scripts/create_partition.py "$(TITLE)" "$(DESC)" $(PATHS)
+
+# List all existing partitions
+list-partitions:
+	@echo "Existing partitions:"
+	@if [ -d "partitions" ] && [ -n "$$(ls -A partitions/*.json 2>/dev/null)" ]; then \
+		for file in partitions/*.json; do \
+			echo ""; \
+			echo "📋 $$(basename $$file)"; \
+			python3 -c "import json; f=open('$$file'); d=json.load(f); print(f\"   ID: {d.get('partition_id')}\"); print(f\"   Title: {d.get('title')}\"); print(f\"   Files: {len(d.get('paths', []))}\")"; \
+		done; \
+	else \
+		echo "No partitions found in partitions/ directory"; \
+	fi
+
+# Clean all partitions
+clean-partitions:
+	@echo "Removing all partitions..."
+	@rm -f partitions/partition_*.json
+	@echo "✓ Cleaned all partition files"
+
+# View example partition structure
+view-examples:
+	@echo "Viewing example partition structure..."
+	@cat examples/partition_example/README.md

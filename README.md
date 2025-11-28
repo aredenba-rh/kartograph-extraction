@@ -1,200 +1,111 @@
-# kartograph-extraction
+# Kartograph Extraction
 
-A sparse git checkout utility for extracting specific documentation and content from repositories for Knowledge Graph as a Service (KGaaS) platform development.
+Knowledge Graph extraction framework with automated partition creation and ontology management using Claude Code Agent SDK.
 
 ## Overview
 
-This repository provides a declarative YAML-based system for performing shallow, sparse git checkouts of specific directories from source repositories. This allows you to efficiently extract only the content you need without cloning entire repositories.
+This project creates knowledge graphs from documentation sources by:
+1. **Partitioning** files into logical groupings
+2. **Creating ontologies** for each partition (entity and relationship types)
+3. **Extracting** knowledge graph triples from the content
 
-## Features
-
-- 🎯 **Sparse Checkout**: Only clone specific directories/paths
-- ⚡ **Shallow Clone**: Uses `--depth=1` for minimal history
-- 📝 **Declarative Configuration**: YAML-based data source definitions
-- 🔐 **Credential Support**: Environment variable-based authentication for private repos
-- 🔄 **Easy Switching**: Quickly switch between data sources
-- 🧹 **Clean Management**: Easy cleanup of downloaded data
+Currently configured to extract from ROSA (Red Hat OpenShift on AWS) documentation.
 
 ## Quick Start
 
-### 1. Install Dependencies
-
 ```bash
-make install-deps
+# Start the extraction workflow
+python scripts/start_extraction_workflow.py
+
+# Validate existing partitions
+python scripts/confirm_acceptable_partition.py
+
+# View checklist progress
+make view-checklist
 ```
 
-### 2. Fetch OpenShift Documentation (Public)
+## Workflow Steps
 
-```bash
-make fetch-openshift-docs
-```
+### Step 1: Create File Partitions (Automated)
 
-This will create `data/openshift-docs/` with the following structure:
-- `modules/` - Actual documentation content
-- `_attributes/` - Variable definitions
-- `snippets/` - Shared content fragments
-- `rosa_*/` - ROSA-specific documentation (9 directories)
-- `osd_*/` - OpenShift Dedicated documentation (8 directories)
-- `hosted_control_planes/` - HCP documentation
+The workflow automatically invokes Claude Code Agent SDK to analyze your data source and create logical partitions.
 
-### 3. Fetch ROSA KCS (Private - Requires Credentials)
+**Partitions are:**
+- Logical groupings of files for knowledge graph extraction
+- Disjoint (each file appears in exactly one partition)
+- Complete (all files are covered)
 
-First, set up your credentials:
+Claude uses the `create_partition.py` script to create partitions, which are then automatically validated.
 
-```bash
-# Copy the example environment file
-cp .env.example .env
+### Step 2: Create Ontologies
 
-# Edit .env and add your GitHub token
-# ROSA_KCS_GIT_TOKEN=ghp_your_token_here
-```
+For each partition, define:
+- **Entity types** (e.g., AWSService, Configuration, Error)
+- **Relationship types** (e.g., REQUIRES, DOCUMENTS, CONFIGURES)
 
-Then fetch:
-
-```bash
-make fetch-rosa-kcs
-```
-
-This will create `data/rosa-kcs/kcs_solutions/` with the KCS solutions content.
+These are merged into master ontologies to maintain consistency across the knowledge graph.
 
 ## Configuration
 
-Data sources are defined as YAML files in the `contexts/` directory.
+Edit `extraction_config.json`:
 
-### Example: OpenShift Docs (`contexts/openshift-docs.yaml`)
-
-```yaml
-name: openshift-docs
-description: OpenShift documentation - ROSA, OSD, and HCP content
-git_url: https://github.com/openshift/openshift-docs
-credential_env_var: null  # Public repo, no credentials needed
-branch: main
-sparse_paths:
-  - modules/
-  - _attributes/
-  - rosa_architecture/
-  # ... more paths
-```
-
-### Example: ROSA KCS (`contexts/rosa-kcs.yaml`)
-
-```yaml
-name: rosa-kcs
-description: ROSA Knowledge Centered Service solutions
-git_url: https://github.com/aredenba-rh/rosa-kcs
-credential_env_var: ROSA_KCS_GIT_TOKEN
-branch: main
-sparse_paths:
-  - kcs_solutions/
-```
-
-## Available Make Targets
-
-```bash
-make help                  # Show all available targets
-make install-deps          # Install Python dependencies
-make fetch-openshift-docs  # Fetch OpenShift documentation
-make fetch-rosa-kcs        # Fetch ROSA KCS (requires credentials)
-make fetch-all             # Fetch all data sources
-make list-data             # List downloaded data
-make clean                 # Remove all data
-make clean-openshift       # Remove OpenShift docs only
-make clean-rosa-kcs        # Remove ROSA KCS only
-make switch-to-openshift   # Clean others and fetch OpenShift
-make switch-to-rosa        # Clean others and fetch ROSA KCS
-```
-
-## Direct Script Usage
-
-You can also use the Python script directly:
-
-```bash
-# Fetch with default settings
-python3 contexts/get_data_source.py contexts/openshift-docs.yaml
-
-# Fetch and list contents
-python3 contexts/get_data_source.py contexts/openshift-docs.yaml --list
-
-# Use custom data directory
-python3 contexts/get_data_source.py contexts/openshift-docs.yaml --data-dir /tmp/data
-
-# Clean only (no fetch)
-python3 contexts/get_data_source.py contexts/openshift-docs.yaml --clean-only
+```json
+{
+  "use_current_partition": false,  // Skip partition creation step
+  "use_current_ontologies": false  // Skip ontology creation step
+}
 ```
 
 ## Directory Structure
 
 ```
 kartograph-extraction/
-├── contexts/              # Data source configuration files
-│   ├── get_data_source.py # Sparse checkout utility script
-│   ├── openshift-docs.yaml
-│   └── rosa-kcs.yaml
-├── data/                  # Downloaded content (gitignored)
-│   ├── openshift-docs/
-│   └── rosa-kcs/
-├── extraction/            # Extraction and processing scripts
-├── .env                   # Environment variables (gitignored)
-├── .env.example           # Example environment configuration
-├── Makefile               # Make targets for easy usage
-└── README.md              # This file
+├── checklists/          # Workflow tracking
+├── contexts/            # Data source configurations
+├── data/                # Source documentation
+├── examples/            # Example partition structures
+├── ontologies/          # Master ontologies
+├── partitions/          # Generated partition files
+├── schemas/             # JSON schemas for validation
+└── scripts/             # Automation scripts
 ```
 
-## Adding New Data Sources
+## Examples
 
-1. Create a new YAML file in `contexts/`:
+See `examples/partition_example/` for a complete demonstration of:
+- How to structure data
+- How to create partitions
+- Directory vs. file path notation
+- Complete and disjoint coverage
 
-```yaml
-name: my-new-source
-description: Description of the data source
-git_url: https://github.com/org/repo
-credential_env_var: MY_REPO_TOKEN  # or null for public repos
-branch: main
-sparse_paths:
-  - path/to/content/
-  - another/path/
-```
+## Scripts
 
-2. Add your credential to `.env` (if needed):
+### `start_extraction_workflow.py`
+Main orchestration script that:
+- Invokes Claude Code Agent SDK
+- Validates partitions automatically
+- Routes to appropriate workflow steps
+- Handles validation failures with retry logic
 
+### `create_partition.py`
+Creates partition files with auto-incrementing IDs:
 ```bash
-MY_REPO_TOKEN=your_token_here
+python scripts/create_partition.py \
+  "Title" \
+  "Description of files in this partition" \
+  "data/folder/" \
+  "data/specific_file.md"
 ```
 
-3. Add a Make target to `Makefile`:
+### `confirm_acceptable_partition.py`
+Validates partition coverage:
+- Checks for duplicate files
+- Checks for missing files
+- Validates directory path expansion
+- Returns detailed error messages
 
-```makefile
-fetch-my-source:
-	python3 contexts/get_data_source.py contexts/my-new-source.yaml --list
-```
+## Contributing
 
-4. Run it:
-
-```bash
-make fetch-my-source
-```
-
-## Environment Variables
-
-Create a `.env` file (from `.env.example`) with your credentials:
-
-- `ROSA_KCS_GIT_TOKEN`: GitHub Personal Access Token for rosa-kcs repository
-  - Create at: https://github.com/settings/tokens
-  - Required scopes: `repo` (Full control of private repositories)
-
-## Tips
-
-- **Switching Data Sources**: Use `make clean` between fetches if you want to avoid mixing data
-- **Storage**: Sparse checkouts are much smaller than full clones
-- **Updates**: Re-run `make fetch-*` to get the latest content from `origin/main`
-- **Git Metadata**: The `.git` directory is kept by default. Uncomment the cleanup code in `get_data_source.py` if you want to save more space
-
-## Requirements
-
-- Python 3.6+
-- Git
-- PyYAML (installed via `make install-deps`)
-
-## License
-
-[Your License Here]
+1. Follow the checklist workflow in `checklists/`
+2. Use provided scripts for automation
+3. Validate changes before committing

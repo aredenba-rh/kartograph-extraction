@@ -1,0 +1,12 @@
+{
+  "partition_id": 2,
+  "title": "Supporting Resources",
+  "description": "Secondary supporting documentation including specific fileBB from folderB and top-level fileC. These files provide supplementary information and supporting context.",
+  "paths": [
+    "examples/partition_example/data/folderB/fileBB.md",
+    "examples/partition_example/data/fileC.md"
+  ],
+  "entity_ontology": [],
+  "relationship_ontology": []
+}
+

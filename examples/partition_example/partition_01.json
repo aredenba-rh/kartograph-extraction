@@ -1,0 +1,14 @@
+{
+  "partition_id": 1,
+  "title": "Core Documentation",
+  "description": "Primary documentation files including all of folderA, specific fileBA from folderB, and top-level files A and B. These files represent the main documentation set for the knowledge graph.",
+  "paths": [
+    "examples/partition_example/data/folderA/",
+    "examples/partition_example/data/folderB/fileBA.md",
+    "examples/partition_example/data/fileA.md",
+    "examples/partition_example/data/fileB.md"
+  ],
+  "entity_ontology": [],
+  "relationship_ontology": []
+}
+
