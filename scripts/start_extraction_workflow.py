@@ -21,13 +21,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def log_to_file(key: str, value: str):
+def log_to_file(key: str, value):
     """
     Log a key-value pair to logging/logging.json
     
     Args:
         key: The log entry key
-        value: The log entry value
+        value: The log entry value (can be string or dict/list)
     """
     log_dir = Path("logging")
     log_dir.mkdir(exist_ok=True)
@@ -38,8 +38,170 @@ def log_to_file(key: str, value: str):
         with open(log_file, 'r') as f:
             logs = json.load(f)
     else:
-        logs = {}    # TODO: Update this to use the actual agent SDK API when available
+        logs = {}
+    
+    # Update the log entry
+    logs[key] = value
+    
+    # Write back to file
+    with open(log_file, 'w') as f:
+        json.dump(logs, f, indent=2)
 
+
+def log_usage(step_name: str, attempt_num: int, iteration_num: int, response, stop_reason: str):
+    """
+    Log token usage for a specific iteration within an attempt.
+    
+    Args:
+        step_name: Name of the workflow step (e.g., "step_1.1_file_partitions")
+        attempt_num: Current attempt number (1-indexed)
+        iteration_num: Current iteration number (1-indexed)
+        response: The API response object
+        stop_reason: The stop reason for this iteration
+    """
+    log_dir = Path("logging")
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / "logging.json"
+    
+    # Load existing logs
+    if log_file.exists():
+        with open(log_file, 'r') as f:
+            logs = json.load(f)
+    else:
+        logs = {}
+    
+    # Initialize step structure if needed
+    if step_name not in logs:
+        logs[step_name] = {
+            "attempts": []
+        }
+    
+    # Initialize attempt structure if needed
+    attempts = logs[step_name]["attempts"]
+    if len(attempts) < attempt_num:
+        attempts.append({
+            "attempt_number": attempt_num,
+            "started_at": None,
+            "completed_at": None,
+            "validation_result": None,
+            "validation_errors": None,
+            "iterations": []
+        })
+    
+    current_attempt = attempts[attempt_num - 1]
+    
+    # Extract usage data from response
+    usage_data = {
+        "iteration": iteration_num,
+        "stop_reason": stop_reason
+    }
+    
+    if hasattr(response, 'usage'):
+        usage = response.usage
+        usage_data["usage"] = {
+            "input_tokens": getattr(usage, 'input_tokens', 0),
+            "output_tokens": getattr(usage, 'output_tokens', 0),
+        }
+        
+        # Optional fields (may not always be present)
+        if hasattr(usage, 'cache_creation_input_tokens'):
+            usage_data["usage"]["cache_creation_input_tokens"] = usage.cache_creation_input_tokens
+        if hasattr(usage, 'cache_read_input_tokens'):
+            usage_data["usage"]["cache_read_input_tokens"] = usage.cache_read_input_tokens
+    
+    # Add iteration data
+    current_attempt["iterations"].append(usage_data)
+    
+    # Write back to file
+    with open(log_file, 'w') as f:
+        json.dump(logs, f, indent=2)
+
+
+def finalize_attempt_log(step_name: str, attempt_num: int, validation_result: str, validation_errors: Optional[str] = None):
+    """
+    Finalize an attempt by adding validation results and calculating totals.
+    
+    Args:
+        step_name: Name of the workflow step
+        attempt_num: Current attempt number (1-indexed)
+        validation_result: "success" or "failed"
+        validation_errors: Error message if validation failed
+    """
+    from datetime import datetime
+    
+    log_dir = Path("logging")
+    log_file = log_dir / "logging.json"
+    
+    if not log_file.exists():
+        return
+    
+    with open(log_file, 'r') as f:
+        logs = json.load(f)
+    
+    if step_name not in logs or len(logs[step_name]["attempts"]) < attempt_num:
+        return
+    
+    current_attempt = logs[step_name]["attempts"][attempt_num - 1]
+    
+    # Set completion timestamp and validation results
+    current_attempt["completed_at"] = datetime.utcnow().isoformat() + "Z"
+    current_attempt["validation_result"] = validation_result
+    if validation_errors:
+        current_attempt["validation_errors"] = validation_errors
+    
+    # Calculate totals for this attempt
+    total_input = 0
+    total_output = 0
+    total_cache_creation = 0
+    total_cache_read = 0
+    
+    for iteration in current_attempt["iterations"]:
+        if "usage" in iteration:
+            usage = iteration["usage"]
+            total_input += usage.get("input_tokens", 0)
+            total_output += usage.get("output_tokens", 0)
+            total_cache_creation += usage.get("cache_creation_input_tokens", 0)
+            total_cache_read += usage.get("cache_read_input_tokens", 0)
+    
+    current_attempt["total_usage"] = {
+        "input_tokens": total_input,
+        "output_tokens": total_output,
+        "cache_creation_input_tokens": total_cache_creation,
+        "cache_read_input_tokens": total_cache_read,
+        "total_iterations": len(current_attempt["iterations"])
+    }
+    
+    # Calculate cumulative usage across all attempts for this step
+    cumulative_input = 0
+    cumulative_output = 0
+    cumulative_cache_creation = 0
+    cumulative_cache_read = 0
+    cumulative_iterations = 0
+    successful_attempt = None
+    
+    for idx, attempt in enumerate(logs[step_name]["attempts"]):
+        if "total_usage" in attempt:
+            cumulative_input += attempt["total_usage"]["input_tokens"]
+            cumulative_output += attempt["total_usage"]["output_tokens"]
+            cumulative_cache_creation += attempt["total_usage"]["cache_creation_input_tokens"]
+            cumulative_cache_read += attempt["total_usage"]["cache_read_input_tokens"]
+            cumulative_iterations += attempt["total_usage"]["total_iterations"]
+        
+        if attempt.get("validation_result") == "success":
+            successful_attempt = idx + 1
+    
+    logs[step_name]["cumulative_usage"] = {
+        "total_attempts": len(logs[step_name]["attempts"]),
+        "successful_attempt": successful_attempt,
+        "total_iterations": cumulative_iterations,
+        "total_input_tokens": cumulative_input,
+        "total_output_tokens": cumulative_output,
+        "total_cache_creation_tokens": cumulative_cache_creation,
+        "total_cache_read_tokens": cumulative_cache_read
+    }
+    
+    # Write back to file
+    with open(log_file, 'w') as f:
         json.dump(logs, f, indent=2)
 
 
@@ -70,6 +232,40 @@ def load_checklist(checklist_id: str) -> Dict:
     
     with open(checklist_path, 'r') as f:
         return json.load(f)
+
+
+def print_usage_summary(step_name: str):
+    """
+    Print a summary of token usage for a step from the log file.
+    
+    Args:
+        step_name: Name of the workflow step
+    """
+    log_file = Path("logging") / "logging.json"
+    
+    if not log_file.exists():
+        return
+    
+    with open(log_file, 'r') as f:
+        logs = json.load(f)
+    
+    if step_name not in logs or "cumulative_usage" not in logs[step_name]:
+        return
+    
+    cumulative = logs[step_name]["cumulative_usage"]
+    
+    print(f"Attempts: {cumulative.get('total_attempts', 0)}")
+    if cumulative.get('successful_attempt'):
+        print(f"Successful attempt: #{cumulative.get('successful_attempt')}")
+    print(f"Total iterations: {cumulative.get('total_iterations', 0)}")
+    print(f"Total input tokens: {cumulative.get('total_input_tokens', 0):,}")
+    print(f"Total output tokens: {cumulative.get('total_output_tokens', 0):,}")
+    
+    if cumulative.get('total_cache_read_tokens', 0) > 0:
+        print(f"Cache read tokens: {cumulative.get('total_cache_read_tokens', 0):,}")
+    if cumulative.get('total_cache_creation_tokens', 0) > 0:
+        print(f"Cache creation tokens: {cumulative.get('total_cache_creation_tokens', 0):,}")
+    print()
 
 
 def get_data_source_path() -> str:
@@ -181,6 +377,7 @@ def step_1_create_file_partitions() -> bool:
         True if partitions were created and validated successfully
     """
     from anthropic import AnthropicVertex
+    from datetime import datetime
     
     # Import validation function
     sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
@@ -198,7 +395,9 @@ def step_1_create_file_partitions() -> bool:
     user_message = build_partition_creation_prompt(data_source_path)
     
     # Log the initial prompt (only once, before retry loop)
-    log_to_file("1.1 File Partitions Prompt", user_message)
+    log_to_file("step_1.1_file_partitions_prompt", user_message)
+    
+    step_name = "step_1.1_file_partitions"
     
     print("=" * 60)
     print("STEP 1.1: Creating File Partitions")
@@ -235,7 +434,8 @@ def step_1_create_file_partitions() -> bool:
             tools = [
                 {
                     "type": "bash_20241022",
-                    "name": "bash"
+                    "name": "bash",
+                    "cache_control": {"type": "ephemeral"}  # Cache tool definition
                 }
             ]
             
@@ -243,7 +443,14 @@ def step_1_create_file_partitions() -> bool:
             messages = [
                 {
                     "role": "user",
-                    "content": user_message
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": user_message,
+                            # Mark the initial prompt for caching
+                            "cache_control": {"type": "ephemeral"}
+                        }
+                    ]
                 }
             ]
             
@@ -256,23 +463,50 @@ def step_1_create_file_partitions() -> bool:
                 print(f"\n--- Iteration {iteration} ---")
                 
                 # Call Claude API
+                ## Enable 1M token context window (beta feature)
+                ## extra_headers={"anthropic-beta": "context-1m-2025-08-07"}
                 response = client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
+                    model="claude-sonnet-4-5@20250929",
                     max_tokens=8096,
+                    thinking={
+                        "type": "enabled",
+                        "budget_tokens": 25000  # Extended thinking for strategic planning and problem-solving
+                    },
                     tools=tools,
                     messages=messages
                 )
+
+                
                 
                 print(f"Stop reason: {response.stop_reason}")
+                
+                # Log token usage for this iteration
+                log_usage(step_name, attempt, iteration, response, response.stop_reason)
+                
+                # Monitor token usage (especially thinking tokens)
+                if hasattr(response, 'usage'):
+                    usage = response.usage
+                    print(f"📊 Token Usage:")
+                    print(f"   Input: {usage.input_tokens}")
+                    print(f"   Output: {usage.output_tokens}")
+                    
+                    # Check for thinking token usage (extended thinking feature)
+                    if hasattr(usage, 'cache_creation_input_tokens'):
+                        print(f"   Cache creation: {usage.cache_creation_input_tokens}")
+                    if hasattr(usage, 'cache_read_input_tokens'):
+                        print(f"   Cache read: {usage.cache_read_input_tokens}")
+                    
+                    # WARNING: Check if we're hitting thinking token limits
+                    # Note: The API doesn't expose thinking tokens directly in usage yet,
+                    # but we can infer issues if output is unexpectedly truncated
+                    if usage.output_tokens >= 8000:  # Close to max_tokens limit
+                        print("   ⚠️  WARNING: Close to output token limit!")
                 
                 # Add assistant's response to messages
                 messages.append({
                     "role": "assistant",
                     "content": response.content
                 })
-                
-                # Log updated messages array
-                log_to_file("1.1 File Partitions Prompt", json.dumps(messages, indent=2))
                 
                 # Check if Claude is done
                 if response.stop_reason == "end_turn":
@@ -331,9 +565,6 @@ def step_1_create_file_partitions() -> bool:
                         "role": "user",
                         "content": tool_results
                     })
-                    
-                    # Log updated messages array
-                    log_to_file("1.1 File Partitions Prompt", json.dumps(messages, indent=2))
                 else:
                     # Unexpected stop reason
                     print(f"⚠️  Unexpected stop reason: {response.stop_reason}")
@@ -357,6 +588,15 @@ def step_1_create_file_partitions() -> bool:
         is_valid, error_message = validate_and_get_errors()
         
         if is_valid:
+            # Log successful attempt
+            finalize_attempt_log(step_name, attempt, "success")
+            
+            # Show token usage summary
+            print(f"\n{'='*60}")
+            print("📊 Token Usage Summary")
+            print(f"{'='*60}")
+            print_usage_summary(step_name)
+            
             print("✅ VALIDATION PASSED!")
             print("Partitions are complete and disjoint.")
             print(f"\n{'='*60}")
@@ -364,6 +604,15 @@ def step_1_create_file_partitions() -> bool:
             print(f"{'='*60}\n")
             return True
         else:
+            # Log failed attempt
+            finalize_attempt_log(step_name, attempt, "failed", error_message)
+            
+            # Show token usage summary for this attempt
+            print(f"\n{'='*60}")
+            print("📊 Token Usage Summary")
+            print(f"{'='*60}")
+            print_usage_summary(step_name)
+            
             print("❌ VALIDATION FAILED!")
             print("\nErrors found:")
             print(error_message)
