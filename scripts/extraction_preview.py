@@ -66,60 +66,20 @@ def show_flags():
     print("  Flag                                Value        Toggle Command")
     print("  " + "─" * 66)
     
-    # Flag display names with descriptions
-    flag_names = {
-        "use_current_partition": "use_current_partition (Skip 01)",
-        "use_current_ontologies": "use_current_ontologies (Skip 02)"
+    # Flag display names and their corresponding step numbers
+    flag_info = {
+        "use_current_partition": ("use_current_partition", "01"),
+        "use_current_ontologies": ("use_current_ontologies", "02")
     }
     
     for key, value in config.items():
-        status = "✓ ON " if value else "✗ OFF"
+        display_name, step_num = flag_info.get(key, (key, "??"))
+        status = "--SKIP--" if value else f"Step {step_num}"
         toggle_cmd = f"make toggle-{key.replace('_', '-')}"
-        display_name = flag_names.get(key, key)
         print(f"  {display_name:35s}  {status:11s}  {toggle_cmd}")
     
     print()
     print("  💡 Use toggle commands to change flag values")
-    print()
-
-def show_checklist_status():
-    """Show current checklist progress"""
-    print("╔════════════════════════════════════════════════════════════╗")
-    print("║                    Checklist Progress                      ║")
-    print("╚════════════════════════════════════════════════════════════╝")
-    print()
-    
-    master_file = Path("checklists/master_checklist.json")
-    
-    if not master_file.exists():
-        print("  ⚠️  No master checklist found.")
-        print()
-        return
-    
-    with open(master_file, 'r') as f:
-        master = json.load(f)
-    
-    print(f"  {master['title']}")
-    print()
-    
-    for item in master['items']:
-        status = "✓" if item['completed'] else "○"
-        print(f"  {status} {item['item_id']}: {item['description']}")
-        
-        # Show sub-checklist if exists
-        if 'sub_checklist' in item:
-            sub_file = Path(f"checklists/{item['sub_checklist']}")
-            if sub_file.exists():
-                with open(sub_file, 'r') as f:
-                    sub = json.load(f)
-                
-                completed = sum(1 for i in sub['items'] if i['completed'])
-                total = len(sub['items'])
-                
-                print(f"      └─ {sub['title']}: {completed}/{total} items complete")
-    
-    print()
-    print("  💡 View details: make view-checklist")
     print()
 
 def main():
@@ -127,16 +87,6 @@ def main():
     print()
     show_data_overview()
     show_flags()
-    show_checklist_status()
-    
-    print("╔════════════════════════════════════════════════════════════╗")
-    print("║                      Next Steps                            ║")
-    print("╚════════════════════════════════════════════════════════════╝")
-    print()
-    print("  1. Configure flags as needed using 'make toggle-{flag}'")
-    print("  2. Run 'make start-extraction' to begin the workflow")
-    print("  3. Use 'make view-checklist' for detailed progress")
-    print()
 
 if __name__ == "__main__":
     main()

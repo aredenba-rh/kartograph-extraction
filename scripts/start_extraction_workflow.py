@@ -48,16 +48,16 @@ def log_to_file(key: str, value):
         json.dump(logs, f, indent=2)
 
 
-def log_usage(step_name: str, attempt_num: int, iteration_num: int, response, stop_reason: str):
+def log_message(step_name: str, attempt_num: int, message_num: int, message, message_type: str):
     """
-    Log token usage for a specific iteration within an attempt.
+    Log messages from Claude Agent SDK interactions.
     
     Args:
         step_name: Name of the workflow step (e.g., "step_1.1_file_partitions")
         attempt_num: Current attempt number (1-indexed)
-        iteration_num: Current iteration number (1-indexed)
-        response: The API response object
-        stop_reason: The stop reason for this iteration
+        message_num: Current message number (1-indexed)
+        message: The SDK message object
+        message_type: Type of message (AssistantMessage, ToolUseBlock, ToolResultBlock, TextBlock, ResultMessage, etc.)
     """
     log_dir = Path("logging")
     log_dir.mkdir(exist_ok=True)
@@ -85,32 +85,37 @@ def log_usage(step_name: str, attempt_num: int, iteration_num: int, response, st
             "completed_at": None,
             "validation_result": None,
             "validation_errors": None,
-            "iterations": []
+            "messages": []
         })
     
     current_attempt = attempts[attempt_num - 1]
     
-    # Extract usage data from response
-    usage_data = {
-        "iteration": iteration_num,
-        "stop_reason": stop_reason
+    # Extract message data
+    message_data = {
+        "message_number": message_num,
+        "message_type": message_type,
+        "timestamp": None
     }
     
-    if hasattr(response, 'usage'):
-        usage = response.usage
-        usage_data["usage"] = {
-            "input_tokens": getattr(usage, 'input_tokens', 0),
-            "output_tokens": getattr(usage, 'output_tokens', 0),
-        }
-        
-        # Optional fields (may not always be present)
-        if hasattr(usage, 'cache_creation_input_tokens'):
-            usage_data["usage"]["cache_creation_input_tokens"] = usage.cache_creation_input_tokens
-        if hasattr(usage, 'cache_read_input_tokens'):
-            usage_data["usage"]["cache_read_input_tokens"] = usage.cache_read_input_tokens
+    # Extract text content if available
+    if message_type == "TextBlock" and hasattr(message, 'text'):
+        message_data["text_preview"] = message.text[:200] if len(message.text) > 200 else message.text
     
-    # Add iteration data
-    current_attempt["iterations"].append(usage_data)
+    # Extract tool information if available
+    if message_type == "ToolUseBlock" and hasattr(message, 'name'):
+        message_data["tool_name"] = message.name
+        if hasattr(message, 'input'):
+            message_data["tool_input_preview"] = str(message.input)[:200]
+    
+    # Extract result information if available
+    if message_type == "ResultMessage":
+        if hasattr(message, 'subtype'):
+            message_data["result_subtype"] = message.subtype
+        if hasattr(message, 'result'):
+            message_data["result_preview"] = str(message.result)[:200]
+    
+    # Add message data
+    current_attempt["messages"].append(message_data)
     
     # Write back to file
     with open(log_file, 'w') as f:
@@ -149,55 +154,35 @@ def finalize_attempt_log(step_name: str, attempt_num: int, validation_result: st
     if validation_errors:
         current_attempt["validation_errors"] = validation_errors
     
-    # Calculate totals for this attempt
-    total_input = 0
-    total_output = 0
-    total_cache_creation = 0
-    total_cache_read = 0
+    # Calculate message statistics for this attempt
+    total_messages = len(current_attempt.get("messages", []))
     
-    for iteration in current_attempt["iterations"]:
-        if "usage" in iteration:
-            usage = iteration["usage"]
-            total_input += usage.get("input_tokens", 0)
-            total_output += usage.get("output_tokens", 0)
-            total_cache_creation += usage.get("cache_creation_input_tokens", 0)
-            total_cache_read += usage.get("cache_read_input_tokens", 0)
+    # Count message types
+    message_type_counts = {}
+    for msg in current_attempt.get("messages", []):
+        msg_type = msg.get("message_type", "unknown")
+        message_type_counts[msg_type] = message_type_counts.get(msg_type, 0) + 1
     
-    current_attempt["total_usage"] = {
-        "input_tokens": total_input,
-        "output_tokens": total_output,
-        "cache_creation_input_tokens": total_cache_creation,
-        "cache_read_input_tokens": total_cache_read,
-        "total_iterations": len(current_attempt["iterations"])
+    current_attempt["summary"] = {
+        "total_messages": total_messages,
+        "message_type_counts": message_type_counts
     }
     
-    # Calculate cumulative usage across all attempts for this step
-    cumulative_input = 0
-    cumulative_output = 0
-    cumulative_cache_creation = 0
-    cumulative_cache_read = 0
-    cumulative_iterations = 0
+    # Calculate cumulative statistics across all attempts for this step
+    cumulative_messages = 0
     successful_attempt = None
     
     for idx, attempt in enumerate(logs[step_name]["attempts"]):
-        if "total_usage" in attempt:
-            cumulative_input += attempt["total_usage"]["input_tokens"]
-            cumulative_output += attempt["total_usage"]["output_tokens"]
-            cumulative_cache_creation += attempt["total_usage"]["cache_creation_input_tokens"]
-            cumulative_cache_read += attempt["total_usage"]["cache_read_input_tokens"]
-            cumulative_iterations += attempt["total_usage"]["total_iterations"]
+        if "summary" in attempt:
+            cumulative_messages += attempt["summary"]["total_messages"]
         
         if attempt.get("validation_result") == "success":
             successful_attempt = idx + 1
     
-    logs[step_name]["cumulative_usage"] = {
+    logs[step_name]["cumulative_summary"] = {
         "total_attempts": len(logs[step_name]["attempts"]),
         "successful_attempt": successful_attempt,
-        "total_iterations": cumulative_iterations,
-        "total_input_tokens": cumulative_input,
-        "total_output_tokens": cumulative_output,
-        "total_cache_creation_tokens": cumulative_cache_creation,
-        "total_cache_read_tokens": cumulative_cache_read
+        "total_messages": cumulative_messages
     }
     
     # Write back to file
@@ -236,7 +221,7 @@ def load_checklist(checklist_id: str) -> Dict:
 
 def print_usage_summary(step_name: str):
     """
-    Print a summary of token usage for a step from the log file.
+    Print a summary of message statistics for a step from the log file.
     
     Args:
         step_name: Name of the workflow step
@@ -249,22 +234,15 @@ def print_usage_summary(step_name: str):
     with open(log_file, 'r') as f:
         logs = json.load(f)
     
-    if step_name not in logs or "cumulative_usage" not in logs[step_name]:
+    if step_name not in logs or "cumulative_summary" not in logs[step_name]:
         return
     
-    cumulative = logs[step_name]["cumulative_usage"]
+    cumulative = logs[step_name]["cumulative_summary"]
     
     print(f"Attempts: {cumulative.get('total_attempts', 0)}")
     if cumulative.get('successful_attempt'):
         print(f"Successful attempt: #{cumulative.get('successful_attempt')}")
-    print(f"Total iterations: {cumulative.get('total_iterations', 0)}")
-    print(f"Total input tokens: {cumulative.get('total_input_tokens', 0):,}")
-    print(f"Total output tokens: {cumulative.get('total_output_tokens', 0):,}")
-    
-    if cumulative.get('total_cache_read_tokens', 0) > 0:
-        print(f"Cache read tokens: {cumulative.get('total_cache_read_tokens', 0):,}")
-    if cumulative.get('total_cache_creation_tokens', 0) > 0:
-        print(f"Cache creation tokens: {cumulative.get('total_cache_creation_tokens', 0):,}")
+    print(f"Total messages exchanged: {cumulative.get('total_messages', 0)}")
     print()
 
 
@@ -376,8 +354,9 @@ def step_1_create_file_partitions() -> bool:
     Returns:
         True if partitions were created and validated successfully
     """
-    from anthropic import AnthropicVertex
+    from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, AssistantMessage, ToolUseBlock, ToolResultBlock, TextBlock
     from datetime import datetime
+    import asyncio
     
     # Import validation function
     sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
@@ -406,179 +385,121 @@ def step_1_create_file_partitions() -> bool:
     print(f"Available tools: {', '.join(available_tools)}")
     print()
     
-    # Initialize Anthropic Vertex client
-    project_id = os.environ.get("VERTEX_PROJECT_ID")
-    region = os.environ.get("VERTEX_REGION")
-    
-    if not project_id or not region:
-        print("❌ Error: VERTEX_PROJECT_ID and VERTEX_REGION must be set in .env file")
-        return False
-    
-    client = AnthropicVertex(project_id=project_id, region=region)
-    print(f"📡 Connected to Vertex AI (Project: {project_id}, Region: {region})")
+    print(f"🔗 Using Claude Agent SDK")
+    print()
     
     max_attempts = 3
     attempt = 0
     
+    async def run_partition_creation_attempt(attempt_num: int, prompt: str) -> tuple[bool, Optional[str]]:
+        """
+        Run a single attempt at partition creation with Claude Agent SDK.
+        
+        Returns:
+            Tuple of (success, error_message)
+        """
+        # Configure Claude Agent SDK options
+        options = ClaudeAgentOptions(
+            allowed_tools=["Bash"],  # Allow Claude to run bash commands
+            permission_mode="acceptEdits",  # Auto-accept tool executions
+            cwd=str(Path.cwd())  # Set working directory to project root
+        )
+        
+        message_count = 0
+        
+        try:
+            async with ClaudeSDKClient(options=options) as client:
+                print(f"🤖 Starting Claude Agent SDK session...")
+                
+                # Send initial query
+                await client.query(prompt)
+                
+                print(f"📡 Claude is working on creating partitions...")
+                print(f"    (Claude will run bash commands as needed)")
+                print()
+                
+                # Receive all messages until completion
+                async for message in client.receive_messages():
+                    message_count += 1
+                    
+                    # Determine message type for logging
+                    message_type = type(message).__name__
+                    
+                    # Log the message
+                    log_message(step_name, attempt_num, message_count, message, message_type)
+                    
+                    # Handle different message types
+                    if isinstance(message, AssistantMessage):
+                        # Process assistant message blocks
+                        for block in message.content:
+                            if isinstance(block, TextBlock):
+                                # Claude is explaining what it's doing
+                                text_preview = block.text[:150].replace('\n', ' ')
+                                print(f"💭 Claude: {text_preview}...")
+                            elif isinstance(block, ToolUseBlock):
+                                # Claude is using a tool
+                                if block.name == "Bash":
+                                    command = block.input.get('command', 'N/A')
+                                    # Truncate long commands for display
+                                    cmd_preview = command if len(command) <= 80 else command[:77] + "..."
+                                    print(f"🔧 Running: {cmd_preview}")
+                            elif isinstance(block, ToolResultBlock):
+                                # Tool execution result
+                                if hasattr(block, 'content') and block.content:
+                                    result_text = str(block.content)[:100].replace('\n', ' ')
+                                    print(f"   ✓ Result: {result_text}...")
+                    
+                    # Check for completion
+                    if hasattr(message, 'subtype'):
+                        if message.subtype == 'success':
+                            print(f"\n✅ Claude completed the task successfully!")
+                            print(f"   Total messages exchanged: {message_count}")
+                            return True, None
+                        elif message.subtype == 'error':
+                            error_msg = str(getattr(message, 'result', 'Unknown error'))
+                            print(f"\n❌ Claude encountered an error: {error_msg}")
+                            return False, error_msg
+                
+                # If we exit the loop without a result message, task is complete
+                print(f"\n✅ Claude agent session completed")
+                print(f"   Total messages exchanged: {message_count}")
+                return True, None
+                
+        except Exception as e:
+            print(f"❌ Error during Claude Agent SDK execution: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, str(e)
+    
+    # Main retry loop
     while attempt < max_attempts:
         attempt += 1
         print(f"\n{'='*60}")
         print(f"Attempt {attempt}/{max_attempts}")
         print(f"{'='*60}\n")
         
-        # Run Claude agent with bash tool for executing commands
-        print("🤖 Invoking Claude via Vertex AI...")
+        # Set started timestamp
+        from datetime import datetime
+        log_file = Path("logging") / "logging.json"
+        if log_file.exists():
+            with open(log_file, 'r') as f:
+                logs = json.load(f)
+            if step_name in logs:
+                attempts = logs[step_name]["attempts"]
+                if len(attempts) >= attempt and attempts[attempt - 1]["started_at"] is None:
+                    attempts[attempt - 1]["started_at"] = datetime.utcnow().isoformat() + "Z"
+                    with open(log_file, 'w') as f:
+                        json.dump(logs, f, indent=2)
         
-        try:
-            # Define the bash tool for Claude to execute commands
-            tools = [
-                {
-                    "type": "bash_20241022",
-                    "name": "bash",
-                    "cache_control": {"type": "ephemeral"}  # Cache tool definition
-                }
-            ]
-            
-            # Start conversation with Claude
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": user_message,
-                            # Mark the initial prompt for caching
-                            "cache_control": {"type": "ephemeral"}
-                        }
-                    ]
-                }
-            ]
-            
-            # Agent loop - Claude executes commands until complete
-            max_iterations = 50
-            iteration = 0
-            
-            while iteration < max_iterations:
-                iteration += 1
-                print(f"\n--- Iteration {iteration} ---")
-                
-                # Call Claude API
-                ## Enable 1M token context window (beta feature)
-                ## extra_headers={"anthropic-beta": "context-1m-2025-08-07"}
-                response = client.messages.create(
-                    model="claude-sonnet-4-5@20250929",
-                    max_tokens=8096,
-                    thinking={
-                        "type": "enabled",
-                        "budget_tokens": 25000  # Extended thinking for strategic planning and problem-solving
-                    },
-                    tools=tools,
-                    messages=messages
-                )
-
-                
-                
-                print(f"Stop reason: {response.stop_reason}")
-                
-                # Log token usage for this iteration
-                log_usage(step_name, attempt, iteration, response, response.stop_reason)
-                
-                # Monitor token usage (especially thinking tokens)
-                if hasattr(response, 'usage'):
-                    usage = response.usage
-                    print(f"📊 Token Usage:")
-                    print(f"   Input: {usage.input_tokens}")
-                    print(f"   Output: {usage.output_tokens}")
-                    
-                    # Check for thinking token usage (extended thinking feature)
-                    if hasattr(usage, 'cache_creation_input_tokens'):
-                        print(f"   Cache creation: {usage.cache_creation_input_tokens}")
-                    if hasattr(usage, 'cache_read_input_tokens'):
-                        print(f"   Cache read: {usage.cache_read_input_tokens}")
-                    
-                    # WARNING: Check if we're hitting thinking token limits
-                    # Note: The API doesn't expose thinking tokens directly in usage yet,
-                    # but we can infer issues if output is unexpectedly truncated
-                    if usage.output_tokens >= 8000:  # Close to max_tokens limit
-                        print("   ⚠️  WARNING: Close to output token limit!")
-                
-                # Add assistant's response to messages
-                messages.append({
-                    "role": "assistant",
-                    "content": response.content
-                })
-                
-                # Check if Claude is done
-                if response.stop_reason == "end_turn":
-                    print("✅ Claude completed the task")
-                    break
-                
-                # Execute any tool uses Claude requested
-                if response.stop_reason == "tool_use":
-                    tool_results = []
-                    
-                    for content_block in response.content:
-                        if content_block.type == "tool_use":
-                            tool_name = content_block.name
-                            tool_input = content_block.input
-                            
-                            print(f"\n🔧 Tool: {tool_name}")
-                            print(f"Command: {tool_input.get('command', 'N/A')}")
-                            
-                            if tool_name == "bash":
-                                # Execute bash command
-                                import subprocess
-                                command = tool_input.get("command", "")
-                                
-                                try:
-                                    result = subprocess.run(
-                                        command,
-                                        shell=True,
-                                        capture_output=True,
-                                        text=True,
-                                        timeout=60
-                                    )
-                                    
-                                    output = result.stdout if result.stdout else result.stderr
-                                    print(f"Output: {output[:200]}..." if len(output) > 200 else f"Output: {output}")
-                                    
-                                    tool_results.append({
-                                        "type": "tool_result",
-                                        "tool_use_id": content_block.id,
-                                        "content": output or "Command completed with no output"
-                                    })
-                                except subprocess.TimeoutExpired:
-                                    tool_results.append({
-                                        "type": "tool_result",
-                                        "tool_use_id": content_block.id,
-                                        "content": "Error: Command timed out after 60 seconds"
-                                    })
-                                except Exception as e:
-                                    tool_results.append({
-                                        "type": "tool_result",
-                                        "tool_use_id": content_block.id,
-                                        "content": f"Error: {str(e)}"
-                                    })
-                    
-                    # Add tool results to messages
-                    messages.append({
-                        "role": "user",
-                        "content": tool_results
-                    })
-                else:
-                    # Unexpected stop reason
-                    print(f"⚠️  Unexpected stop reason: {response.stop_reason}")
-                    break
-            
-            if iteration >= max_iterations:
-                print(f"⚠️  Reached maximum iterations ({max_iterations})")
-                print("Claude may not have completed the task")
-            
-            print(f"\n✅ Claude agent execution finished")
-            
-        except Exception as e:
-            print(f"❌ Error executing Claude agent: {e}")
-            return False
+        # Run the partition creation attempt
+        success, error = asyncio.run(run_partition_creation_attempt(attempt, user_message))
+        
+        if not success:
+            finalize_attempt_log(step_name, attempt, "failed", error)
+            print(f"\n❌ Attempt {attempt} failed: {error}")
+            if attempt < max_attempts:
+                print(f"🔄 Will retry...")
+            continue
         
         # Validate the partitions
         print(f"\n{'='*60}")
@@ -591,9 +512,9 @@ def step_1_create_file_partitions() -> bool:
             # Log successful attempt
             finalize_attempt_log(step_name, attempt, "success")
             
-            # Show token usage summary
+            # Show message summary
             print(f"\n{'='*60}")
-            print("📊 Token Usage Summary")
+            print("📊 Session Summary")
             print(f"{'='*60}")
             print_usage_summary(step_name)
             
@@ -607,9 +528,9 @@ def step_1_create_file_partitions() -> bool:
             # Log failed attempt
             finalize_attempt_log(step_name, attempt, "failed", error_message)
             
-            # Show token usage summary for this attempt
+            # Show message summary for this attempt
             print(f"\n{'='*60}")
-            print("📊 Token Usage Summary")
+            print("📊 Session Summary")
             print(f"{'='*60}")
             print_usage_summary(step_name)
             
@@ -630,13 +551,15 @@ VALIDATION ERRORS:
 Please:
 1. Review the errors above
 2. Delete the problematic partition files in partitions/ directory
-3. Create corrected partitions using the create_partition.py script
+3. Create corrected partitions using `make create-partition` command
 4. Ensure complete and disjoint coverage of all files in {data_source_path}
 
 Remember:
 - Each file must appear in exactly ONE partition (no duplicates)
 - ALL files must be covered (no missing files)
 - Use "path/to/directory/" (with trailing slash) to include all files in a directory
+
+Once you've fixed the issues, run `make validate-partitions` to verify.
 """
             else:
                 print(f"\n❌ Maximum attempts ({max_attempts}) reached.")
