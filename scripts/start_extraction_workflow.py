@@ -116,7 +116,7 @@ The ontology ontology creation and entity/relationship extraction come later.
 ## Example Partition Structure
 
 See `{example_partition_path}/` for a working example:
-- **Data**: 7 files in `{example_partition_path}/data/` (2 folders, 3 top-level files)
+- **Data**: 7 files in `{example_partition_path}/data/data_source_repo_name/` (2 folders, 3 top-level files)
 - **Partitions**: 2 partition files demonstrating complete, disjoint coverage
   - `partition_01.json`: Uses directory path `folderA/` (all files) + specific files from `folderB/` + 2 top-level files
   - `partition_02.json`: Remaining file from `folderB/` + 1 top-level file
@@ -145,9 +145,9 @@ python scripts/create_partition.py <title> <description> <path1> [path2] ...
 python scripts/create_partition.py \\
   "Core Documentation" \\
   "Primary documentation files ..." \\
-  "data/folderA/" \\
-  "data/folderB/fileBA.md" \\
-  "data/fileA.md"
+  "data/data_source_repo_name/folderA/" \\
+  "data/data_source_repo_name/folderB/fileBA.md" \\
+  "data/data_source_repo_name/fileA.md"
 ```
 
 ## Success Criteria
