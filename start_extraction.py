@@ -261,6 +261,49 @@ def reset_checklist(checklist_id: str):
     save_checklist(checklist_id, checklist)
 
 
+def mark_checklist_item_complete(checklist_id: str, item_id: str):
+    """
+    Mark a specific checklist item as complete.
+    
+    This function supports both simple items and items with sub_items.
+    For future compatibility, it will also mark all sub_items as complete.
+    
+    Args:
+        checklist_id: The ID of the checklist (e.g., "01_create_file_partitions")
+        item_id: The ID of the item to mark as complete (e.g., "1.1")
+    """
+    checklist = load_checklist(checklist_id)
+    
+    # Find and mark the item as complete
+    for item in checklist.get("items", []):
+        if item.get("item_id") == item_id:
+            item["completed"] = True
+            
+            # Future support: mark all sub_items as complete if they exist
+            if "sub_items" in item:
+                for sub_item in item["sub_items"]:
+                    sub_item["completed"] = True
+            
+            break
+    
+    save_checklist(checklist_id, checklist)
+    print(f"  ✓ Marked {checklist_id} item {item_id} as complete")
+
+
+def mark_master_checklist_step_complete(step_id: str):
+    """
+    Mark a step in the master checklist as complete.
+    
+    This should be called when all items (and sub_items) in a step's
+    sub-checklist have been successfully completed.
+    
+    Args:
+        step_id: The step ID to mark as complete (e.g., "step_01", "step_02")
+    """
+    mark_checklist_item_complete("master_checklist", step_id)
+    print(f"  ✓ Step {step_id} fully complete!")
+
+
 def reset_partitions_folder():
     """Remove all partition JSON files from partitions/ folder"""
     partitions_dir = Path("partitions")
@@ -330,22 +373,36 @@ def get_data_source_path() -> str:
     return str(subdirs[0])
 
 
-def build_partition_creation_prompt(data_source_path: str, example_partition_path: str = "examples/partition_example") -> str:
+def build_partition_creation_prompt(data_source_path: str, special_commands: List[str], example_partition_path: str = "examples/partition_example") -> str:
     """
     Build the user message prompt for Claude to create partitions.
     
     Args:
         data_source_path: Path to the data source directory
+        special_commands: List of make commands available to the agent
         example_partition_path: Path to example partition structure
         
     Returns:
         Formatted prompt string
     """
+    # Format special commands for display
+    commands_list = "\n".join([f"  - `{cmd}`" for cmd in special_commands])
+    
     prompt = f"""I'm building an Knowledge Graph-powered AI Assistant to answer customer questions. We're creating this Knowledge Graph from the data source located at {data_source_path}.
 
 ## Your Task
 
-Step 1 of this Knowledge Graph 
+Step 1 of this Knowledge Graph creation process: Create a partition of all files/paths at {data_source_path}. 
+The ontology creation and entity/relationship extraction come later.
+
+## Available Commands
+
+You have access to a **bash tool** that allows you to execute shell commands. However, you should ONLY use these specific make commands:
+
+{commands_list}
+
+**Important:** Do NOT run scripts directly from the `scripts/` folder. Use only the make commands listed above.
+
 ## Example Partition Structure
 
 See `{example_partition_path}/` for a working example:
@@ -438,19 +495,19 @@ def step_1_create_file_partitions() -> bool:
     # ========================================================================
     
     # Import validation function
-    sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+    sys.path.insert(0, str(Path(__file__).parent / "scripts"))
     from confirm_acceptable_partition import validate_and_get_errors
     
     # Get data source path
     data_source_path = get_data_source_path()
     
-    # Load checklist to get available tools for step 1.1
+    # Load checklist to get special commands for step 1.1
     checklist = load_checklist("01_create_file_partitions")
     step_1_1 = checklist["items"][0]  # First item is 1.1
-    available_tools = step_1_1.get("available_tools", [])
+    special_commands = step_1_1.get("special_commands", [])
     
     # Build the initial prompt
-    user_message = build_partition_creation_prompt(data_source_path)
+    user_message = build_partition_creation_prompt(data_source_path, special_commands)
     
     # Log the initial prompt (only once, before retry loop)
     log_to_file("step_1.1_file_partitions_prompt", user_message)
@@ -461,7 +518,7 @@ def step_1_create_file_partitions() -> bool:
     print("STEP 1.1: Creating File Partitions")
     print("=" * 60)
     print(f"Data source: {data_source_path}")
-    print(f"Available tools: {', '.join(available_tools)}")
+    print(f"Special commands: {', '.join(special_commands)}")
     print()
     
     print(f"🔗 Using Claude Agent SDK")
@@ -590,6 +647,11 @@ def step_1_create_file_partitions() -> bool:
         if is_valid:
             # Log successful attempt
             finalize_attempt_log(step_name, attempt, "success")
+            
+            # Mark checklist item 1.1 as complete
+            print()
+            mark_checklist_item_complete("01_create_file_partitions", "1.1")
+            print()
             
             # Show message summary
             print(f"\n{'='*60}")
@@ -748,6 +810,11 @@ def main():
             print("\n❌ Failed to create valid partitions.")
             print("Please review the errors and try again.")
             return 1
+        else:
+            # Mark step_01 as complete in master checklist
+            print()
+            mark_master_checklist_step_complete("step_01")
+            print()
     
     # Execute Step 2: Create ontologies for each partition
     if step_2:
@@ -756,6 +823,11 @@ def main():
         if not success:
             print("\n❌ Failed to create ontologies.")
             return 1
+        else:
+            # Mark step_02 as complete in master checklist
+            print()
+            mark_master_checklist_step_complete("step_02")
+            print()
     
     return 0
 

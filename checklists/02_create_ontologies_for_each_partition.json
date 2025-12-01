@@ -7,25 +7,25 @@
       "item_id": "2.1",
       "description": "Create entity ontology for each partition",
       "completed": false,
-      "available_tools": ["update_partition_ontology", "check_master_ontology"]
+      "special_commands": ["make update-partition-ontology", "make check-master-ontology"]
     },
     {
       "item_id": "2.2",
       "description": "Create relationship ontology for each partition",
       "completed": false,
-      "available_tools": ["update_partition_ontology", "check_master_ontology"]
+      "special_commands": ["make update-partition-ontology", "make check-master-ontology"]
     },
     {
       "item_id": "2.3",
       "description": "Update master entity ontology",
       "completed": false,
-      "available_tools": ["update_master_ontology", "check_master_ontology"]
+      "special_commands": ["make update-master-ontology", "make check-master-ontology"]
     },
     {
       "item_id": "2.4",
       "description": "Update master relationship ontology",
       "completed": false,
-      "available_tools": ["update_master_ontology", "check_master_ontology"]
+      "special_commands": ["make update-master-ontology", "make check-master-ontology"]
     }
   ]
 }

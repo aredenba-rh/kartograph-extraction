@@ -140,7 +140,7 @@ def validate_partitions(partitions: List[Dict], data_files: Set[str], data_sourc
         partitions: List of partition dictionaries
         data_files: Set of relative file paths from data source
         data_source_path: Full path to data source (e.g., 'data/rosa-kcs')
-        
+
     Returns:
         Tuple of (is_valid, results_dict)
     """
@@ -259,7 +259,7 @@ def print_results(is_valid: bool, results: Dict, data_source_path: str):
     print("\n" + "="*60)
     print("PARTITION VALIDATION RESULTS")
     print("="*60)
-    
+
     print(f"\nData source: {data_source_path}")
     print(f"Total partitions: {results['total_partitions']}")
     print(f"Total files in data source: {results['total_data_files']}")
