@@ -43,14 +43,17 @@ def log_to_file(key: str, value):
     # Update the log entry
     logs[key] = value
     
-    # Write back to file
+    # Write back to file with ensure_ascii=False to preserve readability
     with open(log_file, 'w') as f:
-        json.dump(logs, f, indent=2)
+        json.dump(logs, f, indent=2, ensure_ascii=False)
 
 
 def log_message(step_name: str, attempt_num: int, message_num: int, message, message_type: str):
     """
     Log messages from Claude Agent SDK interactions.
+    
+    Only logs ResultMessage (the final message). All other messages are tracked
+    via message count statistics.
     
     Args:
         step_name: Name of the workflow step (e.g., "step_1.1_file_partitions")
@@ -59,6 +62,8 @@ def log_message(step_name: str, attempt_num: int, message_num: int, message, mes
         message: The SDK message object
         message_type: Type of message (AssistantMessage, ToolUseBlock, ToolResultBlock, TextBlock, ResultMessage, etc.)
     """
+    from datetime import datetime, timezone
+    
     log_dir = Path("logging")
     log_dir.mkdir(exist_ok=True)
     log_file = log_dir / "logging.json"
@@ -81,45 +86,48 @@ def log_message(step_name: str, attempt_num: int, message_num: int, message, mes
     if len(attempts) < attempt_num:
         attempts.append({
             "attempt_number": attempt_num,
-            "started_at": None,
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "completed_at": None,
             "validation_result": None,
             "validation_errors": None,
-            "messages": []
+            "result_message": None,
+            "message_count": 0
         })
     
     current_attempt = attempts[attempt_num - 1]
     
-    # Extract message data
-    message_data = {
-        "message_number": message_num,
-        "message_type": message_type,
-        "timestamp": None
-    }
+    # Update message count
+    current_attempt["message_count"] = message_num
     
-    # Extract text content if available
-    if message_type == "TextBlock" and hasattr(message, 'text'):
-        message_data["text_preview"] = message.text[:200] if len(message.text) > 200 else message.text
-    
-    # Extract tool information if available
-    if message_type == "ToolUseBlock" and hasattr(message, 'name'):
-        message_data["tool_name"] = message.name
-        if hasattr(message, 'input'):
-            message_data["tool_input_preview"] = str(message.input)[:200]
-    
-    # Extract result information if available
+    # Only store the final ResultMessage (full content)
     if message_type == "ResultMessage":
+        result_data = {
+            "message_type": "ResultMessage",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+        # Extract result information
         if hasattr(message, 'subtype'):
-            message_data["result_subtype"] = message.subtype
+            result_data["subtype"] = message.subtype
+        
+        # Store the FULL result content (not truncated)
         if hasattr(message, 'result'):
-            message_data["result_preview"] = str(message.result)[:200]
+            result_data["content"] = str(message.result)
+        
+        # Extract token usage if available
+        if hasattr(message, 'usage'):
+            usage = message.usage
+            result_data["token_usage"] = {
+                "input_tokens": getattr(usage, 'input_tokens', None),
+                "output_tokens": getattr(usage, 'output_tokens', None),
+                "total_tokens": getattr(usage, 'input_tokens', 0) + getattr(usage, 'output_tokens', 0)
+            }
+        
+        current_attempt["result_message"] = result_data
     
-    # Add message data
-    current_attempt["messages"].append(message_data)
-    
-    # Write back to file
+    # Write back to file with ensure_ascii=False for readability
     with open(log_file, 'w') as f:
-        json.dump(logs, f, indent=2)
+        json.dump(logs, f, indent=2, ensure_ascii=False)
 
 
 def finalize_attempt_log(step_name: str, attempt_num: int, validation_result: str, validation_errors: Optional[str] = None):
@@ -132,7 +140,7 @@ def finalize_attempt_log(step_name: str, attempt_num: int, validation_result: st
         validation_result: "success" or "failed"
         validation_errors: Error message if validation failed
     """
-    from datetime import datetime
+    from datetime import datetime, timezone
     
     log_dir = Path("logging")
     log_file = log_dir / "logging.json"
@@ -148,33 +156,42 @@ def finalize_attempt_log(step_name: str, attempt_num: int, validation_result: st
     
     current_attempt = logs[step_name]["attempts"][attempt_num - 1]
     
-    # Set completion timestamp and validation results
-    current_attempt["completed_at"] = datetime.utcnow().isoformat() + "Z"
+    # Set completion timestamp and validation results using timezone-aware datetime
+    current_attempt["completed_at"] = datetime.now(timezone.utc).isoformat()
     current_attempt["validation_result"] = validation_result
     if validation_errors:
         current_attempt["validation_errors"] = validation_errors
     
-    # Calculate message statistics for this attempt
-    total_messages = len(current_attempt.get("messages", []))
+    # Get token usage from result_message if available
+    token_usage = None
+    if "result_message" in current_attempt and current_attempt["result_message"]:
+        token_usage = current_attempt["result_message"].get("token_usage")
     
-    # Count message types
-    message_type_counts = {}
-    for msg in current_attempt.get("messages", []):
-        msg_type = msg.get("message_type", "unknown")
-        message_type_counts[msg_type] = message_type_counts.get(msg_type, 0) + 1
+    # Calculate attempt summary statistics
+    total_messages = current_attempt.get("message_count", 0)
     
     current_attempt["summary"] = {
         "total_messages": total_messages,
-        "message_type_counts": message_type_counts
+        "token_usage": token_usage
     }
     
     # Calculate cumulative statistics across all attempts for this step
     cumulative_messages = 0
+    cumulative_input_tokens = 0
+    cumulative_output_tokens = 0
+    cumulative_total_tokens = 0
     successful_attempt = None
     
     for idx, attempt in enumerate(logs[step_name]["attempts"]):
         if "summary" in attempt:
-            cumulative_messages += attempt["summary"]["total_messages"]
+            cumulative_messages += attempt["summary"].get("total_messages", 0)
+            
+            # Accumulate token usage
+            if attempt["summary"].get("token_usage"):
+                token_data = attempt["summary"]["token_usage"]
+                cumulative_input_tokens += token_data.get("input_tokens", 0) or 0
+                cumulative_output_tokens += token_data.get("output_tokens", 0) or 0
+                cumulative_total_tokens += token_data.get("total_tokens", 0) or 0
         
         if attempt.get("validation_result") == "success":
             successful_attempt = idx + 1
@@ -182,12 +199,17 @@ def finalize_attempt_log(step_name: str, attempt_num: int, validation_result: st
     logs[step_name]["cumulative_summary"] = {
         "total_attempts": len(logs[step_name]["attempts"]),
         "successful_attempt": successful_attempt,
-        "total_messages": cumulative_messages
+        "total_messages": cumulative_messages,
+        "cumulative_token_usage": {
+            "input_tokens": cumulative_input_tokens,
+            "output_tokens": cumulative_output_tokens,
+            "total_tokens": cumulative_total_tokens
+        }
     }
     
-    # Write back to file
+    # Write back to file with ensure_ascii=False for readability
     with open(log_file, 'w') as f:
-        json.dump(logs, f, indent=2)
+        json.dump(logs, f, indent=2, ensure_ascii=False)
 
 
 def load_config() -> Dict:
@@ -217,6 +239,46 @@ def load_checklist(checklist_id: str) -> Dict:
     
     with open(checklist_path, 'r') as f:
         return json.load(f)
+
+
+def save_checklist(checklist_id: str, checklist_data: Dict):
+    """Save checklist to JSON file."""
+    checklist_path = Path(f"checklists/{checklist_id}.json")
+    
+    with open(checklist_path, 'w') as f:
+        json.dump(checklist_data, f, indent=2)
+    print(f"  ✓ Reset checklist: {checklist_id}")
+
+
+def reset_checklist(checklist_id: str):
+    """Reset all items in a checklist to completed=false"""
+    checklist = load_checklist(checklist_id)
+    
+    # Set all items to completed=false
+    for item in checklist.get("items", []):
+        item["completed"] = False
+    
+    save_checklist(checklist_id, checklist)
+
+
+def reset_partitions_folder():
+    """Remove all partition JSON files from partitions/ folder"""
+    partitions_dir = Path("partitions")
+    
+    if not partitions_dir.exists():
+        partitions_dir.mkdir(parents=True, exist_ok=True)
+        print(f"  ✓ Created partitions/ directory")
+        return
+    
+    # Remove all partition JSON files
+    partition_files = list(partitions_dir.glob("partition_*.json"))
+    
+    if partition_files:
+        for partition_file in partition_files:
+            partition_file.unlink()
+        print(f"  ✓ Removed {len(partition_files)} existing partition file(s)")
+    else:
+        print(f"  ✓ Partitions folder already empty")
 
 
 def print_usage_summary(step_name: str):
@@ -283,16 +345,7 @@ def build_partition_creation_prompt(data_source_path: str, example_partition_pat
 
 ## Your Task
 
-Step 1 of this Knowledge Graph creation process: Create a partition of all files/paths at {data_source_path}. 
-The ontology ontology creation and entity/relationship extraction come later.
-
-## Available Tools
-
-You have access to a **bash tool** that allows you to execute shell commands. Use it to:
-- Explore the file system (`ls`, `tree`, `find`, etc.)
-- Run scripts like `make create-partition`
-- Execute validation commands like `make validate-partitions`
-
+Step 1 of this Knowledge Graph 
 ## Example Partition Structure
 
 See `{example_partition_path}/` for a working example:
@@ -351,12 +404,38 @@ def step_1_create_file_partitions() -> bool:
     """
     Execute step 1: Create file partitions using Claude Code Agent SDK
     
+    This function:
+    1. Resets the partitions/ folder (removes existing partitions)
+    2. Resets the checklist (marks all items as incomplete)
+    3. Creates new partitions using Claude Agent SDK
+    4. Validates the partitions
+    
     Returns:
         True if partitions were created and validated successfully
     """
     from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, AssistantMessage, ToolUseBlock, ToolResultBlock, TextBlock
     from datetime import datetime
     import asyncio
+    
+    # ========================================================================
+    # RESET: Clear existing partitions and checklist before starting
+    # ========================================================================
+    print("\n" + "=" * 60)
+    print("RESETTING WORKFLOW FOR FRESH START")
+    print("=" * 60)
+    print()
+    
+    # Remove existing partitions
+    reset_partitions_folder()
+    
+    # Reset the checklist for this step
+    reset_checklist("01_create_file_partitions")
+    
+    print()
+    
+    # ========================================================================
+    # STEP 1.1: Create File Partitions
+    # ========================================================================
     
     # Import validation function
     sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
@@ -575,6 +654,23 @@ def step_2_create_ontologies_for_each_partition() -> bool:
     
     This is a placeholder for the ontology creation workflow.
     """
+    # ========================================================================
+    # RESET: Reset checklist for step 2
+    # ========================================================================
+    print("\n" + "=" * 60)
+    print("PREPARING STEP 2: ONTOLOGY CREATION")
+    print("=" * 60)
+    print()
+    
+    # Reset the checklist for this step
+    reset_checklist("02_create_ontologies_for_each_partition")
+    
+    print()
+    
+    # ========================================================================
+    # STEP 2.1: Create Ontologies
+    # ========================================================================
+    
     print("=" * 60)
     print("STEP 2.1: Create Ontologies for Each Partition")
     print("=" * 60)
@@ -597,14 +693,39 @@ def show_workflow_status(config: Dict):
     print()
     print("Configuration:")
     print("  " + "─" * 56)
+    
+    # Flag display names and their corresponding step numbers
+    flag_info = {
+        "use_current_partition": ("use_current_partition", "01"),
+        "use_current_ontologies": ("use_current_ontologies", "02")
+    }
+    
     for key, value in config.items():
-        status = "✓ ON " if value else "✗ OFF"
-        print(f"  {key:30s} {status}")
+        display_name, step_num = flag_info.get(key, (key, "??"))
+        status = "--SKIP--" if value else f"Step {step_num}"
+        print(f"  {display_name:30s} {status}")
     print()
 
 
 def main():
     """Main workflow orchestration"""
+    # ========================================================================
+    # RESET: Reset master checklist at the beginning of workflow
+    # ========================================================================
+    print("\n" + "=" * 60)
+    print("INITIALIZING EXTRACTION WORKFLOW")
+    print("=" * 60)
+    print()
+    
+    # Reset the master checklist
+    reset_checklist("master_checklist")
+    
+    print()
+    
+    # ========================================================================
+    # Load Configuration and Show Status
+    # ========================================================================
+    
     # Load configuration
     config = load_config()
     show_workflow_status(config)

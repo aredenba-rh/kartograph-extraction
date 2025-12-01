@@ -44,15 +44,16 @@ def create_partition(title: str, description: str, paths: List[str]) -> dict:
     Args:
         title: One sentence summary of the partition
         description: Detailed description of how files in this partition relate
-        paths: List of file paths or directory paths (directory paths should end with /)
+        paths: List of relative file paths from the data source root
         
     Returns:
         Dictionary containing the created partition data
         
     Note:
-        - Paths ending with "/" (e.g., "data/rosa-kcs/kcs_solutions/") indicate 
-          all files within that directory.
-        - Individual file paths should be relative from the project root.
+        - Paths should be RELATIVE to the data source (e.g., "kcs_solutions/file.md" 
+          not "data/rosa-kcs/kcs_solutions/file.md")
+        - The data source path (e.g., "data/rosa-kcs/") is configured in extraction_config.json
+        - Paths ending with "/" (e.g., "kcs_solutions/") indicate all files within that directory.
         - entity_ontology and relationship_ontology are initialized as empty arrays.
     """
     # Input validation
@@ -99,8 +100,10 @@ def main():
     if len(sys.argv) < 4:
         print("Usage: create_partition.py <title> <description> <path1> [path2] [path3] ...")
         print("\nExample:")
-        print('  create_partition.py "AWS Integration" "Files related to AWS service integration" "data/rosa-kcs/kcs_solutions/" "data/config.yaml"')
-        print("\nNote: Use trailing slash for directory paths (e.g., 'data/folder/') to include all files in that directory")
+        print('  create_partition.py "AWS Integration" "Files related to AWS service integration" "kcs_solutions/" "config/settings.yaml"')
+        print("\nNote:")
+        print("  - Paths should be RELATIVE to the data source (configured in extraction_config.json)")
+        print("  - Use trailing slash for directory paths (e.g., 'folder/') to include all files in that directory")
         sys.exit(1)
     
     title = sys.argv[1]

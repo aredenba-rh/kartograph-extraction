@@ -72,8 +72,10 @@ def show_flags():
         "use_current_ontologies": ("use_current_ontologies", "02")
     }
     
-    for key, value in config.items():
-        display_name, step_num = flag_info.get(key, (key, "??"))
+    # Only show the specific flags we care about
+    for key in ["use_current_partition", "use_current_ontologies"]:
+        value = config.get(key, False)
+        display_name, step_num = flag_info[key]
         status = "--SKIP--" if value else f"Step {step_num}"
         toggle_cmd = f"make toggle-{key.replace('_', '-')}"
         print(f"  {display_name:35s}  {status:11s}  {toggle_cmd}")
