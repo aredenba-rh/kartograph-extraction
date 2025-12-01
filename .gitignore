@@ -4,6 +4,9 @@
 # Data directory (downloaded content)
 data/
 
+# Logging directory
+logging/
+
 # Python
 __pycache__/
 *.py[cod]

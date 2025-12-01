@@ -17,6 +17,33 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 
+def log_to_file(key: str, value: str):
+    """
+    Log a key-value pair to logging/logging.json
+    
+    Args:
+        key: The log entry key
+        value: The log entry value
+    """
+    log_dir = Path("logging")
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / "logging.json"
+    
+    # Load existing logs or create new dict
+    if log_file.exists():
+        with open(log_file, 'r') as f:
+            logs = json.load(f)
+    else:
+        logs = {}
+    
+    # Add new entry
+    logs[key] = value
+    
+    # Write back
+    with open(log_file, 'w') as f:
+        json.dump(logs, f, indent=2)
+
+
 def load_config() -> Dict:
     """Load extraction configuration"""
     config_file = Path("extraction_config.json")
@@ -49,10 +76,23 @@ def load_checklist(checklist_id: str) -> Dict:
 def get_data_source_path() -> str:
     """
     Get the data source path to extract from.
-    Currently hardcoded to rosa-kcs, but could be made configurable.
+    Returns the first (and only) folder found in data/ directory.
     """
-    # TODO: Make this configurable via extraction_config.json
-    return "data/rosa-kcs"
+    data_dir = Path("data")
+    
+    if not data_dir.exists():
+        raise FileNotFoundError("data/ directory does not exist")
+    
+    # Get all subdirectories in data/
+    subdirs = [d for d in data_dir.iterdir() if d.is_dir()]
+    
+    if len(subdirs) == 0:
+        raise FileNotFoundError("No subdirectories found in data/")
+    
+    if len(subdirs) > 1:
+        raise ValueError(f"Multiple data sources found in data/: {[d.name for d in subdirs]}. Expected only one.")
+    
+    return str(subdirs[0])
 
 
 def build_partition_creation_prompt(data_source_path: str, example_partition_path: str = "examples/partition_example") -> str:
@@ -124,19 +164,15 @@ Good luck! Start by exploring the contents of {data_source_path}, then create ap
 Once you've created your partitions, run the `make validate-partitions` command to validate them.
 If there are issues, you'll receive detailed feedback about which files are duplicated or missing.
 
-Once you've validated your partitions, request the next 'User Message' from the system.
+**When complete**: After you've created all necessary partitions, and validated them, your task is done - the system will check your work and proceed to the next step.
 """
     return prompt
 
 
-def execute_step_1_1_create_partitions(data_source_path: str, available_tools: List[str]) -> bool:
+def step_1_create_file_partitions() -> bool:
     """
-    Execute step 1.1: Create file partitions using Claude Code Agent SDK
+    Execute step 1: Create file partitions using Claude Code Agent SDK
     
-    Args:
-        data_source_path: Path to the data source directory
-        available_tools: List of available tool names for Claude
-        
     Returns:
         True if partitions were created and validated successfully
     """
@@ -146,8 +182,19 @@ def execute_step_1_1_create_partitions(data_source_path: str, available_tools: L
     sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
     from confirm_acceptable_partition import validate_and_get_errors
     
-    # Build the prompt
+    # Get data source path
+    data_source_path = get_data_source_path()
+    
+    # Load checklist to get available tools for step 1.1
+    checklist = load_checklist("01_create_file_partitions")
+    step_1_1 = checklist["items"][0]  # First item is 1.1
+    available_tools = step_1_1.get("available_tools", [])
+    
+    # Build the initial prompt
     user_message = build_partition_creation_prompt(data_source_path)
+    
+    # Log the initial prompt (only once, before retry loop)
+    log_to_file("1.1 File Partitions Prompt", user_message)
     
     print("=" * 60)
     print("STEP 1.1: Creating File Partitions")
@@ -155,6 +202,12 @@ def execute_step_1_1_create_partitions(data_source_path: str, available_tools: L
     print(f"Data source: {data_source_path}")
     print(f"Available tools: {', '.join(available_tools)}")
     print()
+    
+    # Create Claude agent once (maintains memory across retry attempts)
+    agent = create_agent(
+        name="partition_creator",
+        instructions="You are a data partitioning expert helping to create logical file groupings for knowledge graph extraction.",
+    )
     
     max_attempts = 3
     attempt = 0
@@ -165,17 +218,8 @@ def execute_step_1_1_create_partitions(data_source_path: str, available_tools: L
         print(f"Attempt {attempt}/{max_attempts}")
         print(f"{'='*60}\n")
         
-        # Create Claude agent
-        # Note: The claude-agent-sdk should be properly configured
-        # This is a basic integration - adjust based on actual SDK API
-        agent = create_agent(
-            name="partition_creator",
-            instructions="You are a data partitioning expert helping to create logical file groupings for knowledge graph extraction.",
-        )
-        
         # Run the agent with the prompt
         print("🤖 Invoking Claude Code Agent SDK...")
-        print(f"\nPrompt:\n{user_message}\n")
         
         try:
             # Execute Claude agent
@@ -237,9 +281,9 @@ Remember:
     return False
 
 
-def execute_step_2_1_create_ontologies() -> bool:
+def step_2_create_ontologies_for_each_partition() -> bool:
     """
-    Execute step 2.1: Create ontologies for each partition
+    Execute step 2: Create ontologies for each partition
     
     This is a placeholder for the ontology creation workflow.
     """
@@ -277,45 +321,31 @@ def main():
     config = load_config()
     show_workflow_status(config)
     
-    use_current_partition = config.get('use_current_partition', False)
-    use_current_ontologies = config.get('use_current_ontologies', False)
+    # Determine which steps to execute (True = execute, False = skip)
+    step_1 = not config.get('use_current_partition', False)
+    step_2 = not config.get('use_current_ontologies', False)
     
-    # Determine which step to execute
-    if use_current_partition and use_current_ontologies:
-        print("⚠️  Both workflow steps are skipped!")
+    # If all steps are skipped
+    if not step_1 and not step_2:
+        print("⚠️  All workflow steps are skipped!")
         print("Review existing partitions and ontologies, then proceed to extraction.")
         return 0
-        
-    elif use_current_partition and not use_current_ontologies:
-        print("→ Starting at: Step 2 - Create ontologies for each partition")
-        # Load checklist to get available tools
-        checklist = load_checklist("02_create_ontologies_for_each_partition")
-        # Execute step 2.1
-        success = execute_step_2_1_create_ontologies()
-        return 0 if success else 1
-        
-    elif not use_current_partition:
-        print("→ Starting at: Step 1 - Create file partitions")
-        
-        # Get data source path
-        data_source_path = get_data_source_path()
-        
-        # Load checklist to get available tools for step 1.1
-        checklist = load_checklist("01_create_file_partitions")
-        step_1_1 = checklist["items"][0]  # First item is 1.1
-        available_tools = step_1_1.get("available_tools", [])
-        
-        # Execute step 1.1
-        success = execute_step_1_1_create_partitions(data_source_path, available_tools)
-        
-        if success:
-            # If partitions were created successfully, proceed to step 2.1
-            if not use_current_ontologies:
-                execute_step_2_1_create_ontologies()
-            return 0
-        else:
+    
+    # Execute Step 1: Create file partitions
+    if step_1:
+        print("→ Executing: Step 1 - Create file partitions")
+        success = step_1_create_file_partitions()
+        if not success:
             print("\n❌ Failed to create valid partitions.")
             print("Please review the errors and try again.")
+            return 1
+    
+    # Execute Step 2: Create ontologies for each partition
+    if step_2:
+        print("→ Executing: Step 2 - Create ontologies for each partition")
+        success = step_2_create_ontologies_for_each_partition()
+        if not success:
+            print("\n❌ Failed to create ontologies.")
             return 1
     
     return 0
