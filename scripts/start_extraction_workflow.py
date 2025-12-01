@@ -55,74 +55,60 @@ def get_data_source_path() -> str:
     return "data/rosa-kcs"
 
 
-def build_partition_creation_prompt(data_source_path: str) -> str:
+def build_partition_creation_prompt(data_source_path: str, example_partition_path: str = "examples/partition_example") -> str:
     """
     Build the user message prompt for Claude to create partitions.
     
     Args:
         data_source_path: Path to the data source directory
+        example_partition_path: Path to example partition structure
         
     Returns:
         Formatted prompt string
     """
-    prompt = f"""I'm creating a "ROSA Ask-SRE" Assistant. ROSA indicates "RedHat OpenShift on AWS" and an SRE is a "Site Reliability Engineer" - so, in other words, I'm building an AI chat bot which should have mastery understanding of the 3 datasources in this repo (openshift-docs, ops-sop, rosa-kcs) -> which will then be used to assist our employees to solve our customer's issues.
-
-To do this we are going to create a knowledge graph from {data_source_path}. 
+    prompt = f"""I'm building an Knowledge Graph-powered AI Assistant to answer customer questions. We're creating this Knowledge Graph from the data source located at {data_source_path}.
 
 ## Your Task
 
-Analyze the contents at {data_source_path}, and create a partition of the files/paths there.
+Step 1 of this Knowledge Graph creation process: Create a partition of all files/paths at {data_source_path}. 
+The ontology ontology creation and entity/relationship extraction come later.
 
-## What are Partitions?
+## Example Partition Structure
 
-The partitions should be **logical groupings** of files/paths that could be handled similarly by an agent creating a knowledge graph. Each partition will have an entity ontology and a relationship ontology built for it. 
-
-However, when we get to the entity/relationship creation portion of this KG-creation - we will have dynamic ontologies (meaning that any and all entity-types, relationship-types, and attributes will be captured - so the purpose of the ontologies being created right now is to grab the most common types that will appear for each partition - which we will eventually merge across all partitions in order to standardize our types to eliminate ontology-type-redundancy).
-
-## Partitioning Strategy
-
-- If the data_source is just a single folder of files with a similar structure - they can exist in a single partition
-- If the data source is larger with distinct content types or purposes, create those logical groupings as you see fit
-- Each file in {data_source_path} must appear in exactly ONE partition (disjoint partitions)
-- All files must be covered (complete coverage)
+See `{example_partition_path}/` for a working example:
+- **Data**: 7 files in `{example_partition_path}/data/` (2 folders, 3 top-level files)
+- **Partitions**: 2 partition files demonstrating complete, disjoint coverage
+  - `partition_01.json`: Uses directory path `folderA/` (all files) + specific files from `folderB/` + 2 top-level files
+  - `partition_02.json`: Remaining file from `folderB/` + 1 top-level file
+- **Key Rule**: Every file appears exactly once across all partitions
 
 ## How to Create Partitions
 
-Use the `create_partition.py` script located in the `scripts/` directory. Call it once for each partition you create.
+Call `scripts/create_partition.py` once per partition:
 
-**Function signature:**
 ```bash
-python scripts/create_partition.py <title> <description> <path1> [path2] [path3] ...
+python scripts/create_partition.py <title> <description> <path1> [path2] ...
 ```
 
-**Important Path Notation:**
-- Use **trailing slash** for directory paths: `"data/rosa-kcs/kcs_solutions/"` means ALL files in that directory
-- Use **specific file paths** for individual files: `"data/rosa-kcs/config.yaml"`
-- All paths should be relative from the project root
+**Arguments:**
+- `<title>`: Concise label/title (≤8 words) describing the partition's content (Title should concisely indicate the purpose of this group of files).
+- `<description>`: 3-4 sentences describing the files in this partition - their common characteristics, and their role relative to all the files at {data_source_path}.
+- `<path1> [path2] ...`: One or more file/directory paths to include
 
-**Example:**
+**Path notation:**
+- Directory (with `/`): `"{data_source_path}/subfolder/"` = ALL files in that directory
+- Specific file: `"{data_source_path}/file.md"` = single file
+- All paths relative from project root
+
+**Example** (see `{example_partition_path}/partition_01.json` for actual structure):
 ```bash
-# Partition covering all files in a directory plus specific files
 python scripts/create_partition.py \\
-  "AWS Integration Documentation" \\
-  "Files related to AWS service integration and configurations" \\
-  "data/rosa-kcs/kcs_solutions/" \\
-  "data/rosa-kcs/README.md"
-
-# Partition with only specific files
-python scripts/create_partition.py \\
-  "Configuration Files" \\
-  "System configuration and setup files" \\
-  "data/rosa-kcs/config.yaml" \\
-  "data/rosa-kcs/setup.yaml"
+  "Core Documentation" \\
+  "Primary documentation files ..." \\
+  "data/folderA/" \\
+  "data/folderB/fileBA.md" \\
+  "data/fileA.md"
 ```
-
-## Examples
-
-Check the `examples/partition_example/` directory for a clear demonstration of:
-- How to structure partitions
-- Directory vs. file path notation
-- Complete and disjoint coverage
 
 ## Success Criteria
 
@@ -134,7 +120,11 @@ A successful partition structure must:
 
 After you create your partitions, the system will automatically validate them. If there are issues, you'll receive detailed feedback about which files are duplicated or missing.
 
-Good luck! Start by exploring the contents of {data_source_path}, then create appropriate partitions using the create_partition.py script.
+Good luck! Start by exploring the contents of {data_source_path}, then create appropriate partitions using the create_partition.py script. 
+Once you've created your partitions, run the `make validate-partitions` command to validate them.
+If there are issues, you'll receive detailed feedback about which files are duplicated or missing.
+
+Once you've validated your partitions, request the next 'User Message' from the system.
 """
     return prompt
 
