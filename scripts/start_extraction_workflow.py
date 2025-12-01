@@ -15,6 +15,10 @@ import sys
 import os
 from pathlib import Path
 from typing import Dict, List, Optional
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 def log_to_file(key: str, value: str):
@@ -34,13 +38,8 @@ def log_to_file(key: str, value: str):
         with open(log_file, 'r') as f:
             logs = json.load(f)
     else:
-        logs = {}
-    
-    # Add new entry
-    logs[key] = value
-    
-    # Write back
-    with open(log_file, 'w') as f:
+        logs = {}    # TODO: Update this to use the actual agent SDK API when available
+
         json.dump(logs, f, indent=2)
 
 
@@ -113,6 +112,13 @@ def build_partition_creation_prompt(data_source_path: str, example_partition_pat
 Step 1 of this Knowledge Graph creation process: Create a partition of all files/paths at {data_source_path}. 
 The ontology ontology creation and entity/relationship extraction come later.
 
+## Available Tools
+
+You have access to a **bash tool** that allows you to execute shell commands. Use it to:
+- Explore the file system (`ls`, `tree`, `find`, etc.)
+- Run scripts like `make create-partition`
+- Execute validation commands like `make validate-partitions`
+
 ## Example Partition Structure
 
 See `{example_partition_path}/` for a working example:
@@ -124,10 +130,10 @@ See `{example_partition_path}/` for a working example:
 
 ## How to Create Partitions
 
-Call `scripts/create_partition.py` once per partition:
+Call `make create-partition` with the required arguments:
 
 ```bash
-python scripts/create_partition.py <title> <description> <path1> [path2] ...
+make create-partition TITLE='<title>' DESC='<description>' PATHS='<path1> [path2] ...'
 ```
 
 **Arguments:**
@@ -142,12 +148,10 @@ python scripts/create_partition.py <title> <description> <path1> [path2] ...
 
 **Example** (see `{example_partition_path}/partition_01.json` for actual structure):
 ```bash
-python scripts/create_partition.py \\
-  "Core Documentation" \\
-  "Primary documentation files ..." \\
-  "data/data_source_repo_name/folderA/" \\
-  "data/data_source_repo_name/folderB/fileBA.md" \\
-  "data/data_source_repo_name/fileA.md"
+make create-partition \\
+  TITLE='Core Documentation' \\
+  DESC='Primary documentation files ...' \\
+  PATHS='data/data_source_repo_name/folderA/ data/data_source_repo_name/folderB/fileBA.md data/data_source_repo_name/fileA.md'
 ```
 
 ## Success Criteria
@@ -160,11 +164,11 @@ A successful partition structure must:
 
 After you create your partitions, the system will automatically validate them. If there are issues, you'll receive detailed feedback about which files are duplicated or missing.
 
-Good luck! Start by exploring the contents of {data_source_path}, then create appropriate partitions using the create_partition.py script. 
-Once you've created your partitions, run the `make validate-partitions` command to validate them.
+Good luck! Start by exploring the contents of {data_source_path}, then create appropriate partitions using make create-partition. 
+Once you've created your partitions, run `make validate-partitions` to validate them.
 If there are issues, you'll receive detailed feedback about which files are duplicated or missing.
 
-**When complete**: After you've created all necessary partitions, and validated them, your task is done - the system will check your work and proceed to the next step.
+**When complete**: After you've created all necessary partitions and validated them, your task is done. At that point, send a response WITHOUT using any tools (response.stop_reason == "end_turn") to signal completion.
 """
     return prompt
 
@@ -176,7 +180,7 @@ def step_1_create_file_partitions() -> bool:
     Returns:
         True if partitions were created and validated successfully
     """
-    from claude_agent_sdk import create_agent
+    from anthropic import AnthropicVertex
     
     # Import validation function
     sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
@@ -203,11 +207,16 @@ def step_1_create_file_partitions() -> bool:
     print(f"Available tools: {', '.join(available_tools)}")
     print()
     
-    # Create Claude agent once (maintains memory across retry attempts)
-    agent = create_agent(
-        name="partition_creator",
-        instructions="You are a data partitioning expert helping to create logical file groupings for knowledge graph extraction.",
-    )
+    # Initialize Anthropic Vertex client
+    project_id = os.environ.get("VERTEX_PROJECT_ID")
+    region = os.environ.get("VERTEX_REGION")
+    
+    if not project_id or not region:
+        print("❌ Error: VERTEX_PROJECT_ID and VERTEX_REGION must be set in .env file")
+        return False
+    
+    client = AnthropicVertex(project_id=project_id, region=region)
+    print(f"📡 Connected to Vertex AI (Project: {project_id}, Region: {region})")
     
     max_attempts = 3
     attempt = 0
@@ -218,16 +227,123 @@ def step_1_create_file_partitions() -> bool:
         print(f"Attempt {attempt}/{max_attempts}")
         print(f"{'='*60}\n")
         
-        # Run the agent with the prompt
-        print("🤖 Invoking Claude Code Agent SDK...")
+        # Run Claude agent with bash tool for executing commands
+        print("🤖 Invoking Claude via Vertex AI...")
         
         try:
-            # Execute Claude agent
-            # The agent will have access to run terminal commands
-            result = agent.run(user_message)
+            # Define the bash tool for Claude to execute commands
+            tools = [
+                {
+                    "type": "bash_20241022",
+                    "name": "bash"
+                }
+            ]
             
-            print(f"\n✅ Claude agent completed execution")
-            print(f"Result: {result}")
+            # Start conversation with Claude
+            messages = [
+                {
+                    "role": "user",
+                    "content": user_message
+                }
+            ]
+            
+            # Agent loop - Claude executes commands until complete
+            max_iterations = 50
+            iteration = 0
+            
+            while iteration < max_iterations:
+                iteration += 1
+                print(f"\n--- Iteration {iteration} ---")
+                
+                # Call Claude API
+                response = client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=8096,
+                    tools=tools,
+                    messages=messages
+                )
+                
+                print(f"Stop reason: {response.stop_reason}")
+                
+                # Add assistant's response to messages
+                messages.append({
+                    "role": "assistant",
+                    "content": response.content
+                })
+                
+                # Log updated messages array
+                log_to_file("1.1 File Partitions Prompt", json.dumps(messages, indent=2))
+                
+                # Check if Claude is done
+                if response.stop_reason == "end_turn":
+                    print("✅ Claude completed the task")
+                    break
+                
+                # Execute any tool uses Claude requested
+                if response.stop_reason == "tool_use":
+                    tool_results = []
+                    
+                    for content_block in response.content:
+                        if content_block.type == "tool_use":
+                            tool_name = content_block.name
+                            tool_input = content_block.input
+                            
+                            print(f"\n🔧 Tool: {tool_name}")
+                            print(f"Command: {tool_input.get('command', 'N/A')}")
+                            
+                            if tool_name == "bash":
+                                # Execute bash command
+                                import subprocess
+                                command = tool_input.get("command", "")
+                                
+                                try:
+                                    result = subprocess.run(
+                                        command,
+                                        shell=True,
+                                        capture_output=True,
+                                        text=True,
+                                        timeout=60
+                                    )
+                                    
+                                    output = result.stdout if result.stdout else result.stderr
+                                    print(f"Output: {output[:200]}..." if len(output) > 200 else f"Output: {output}")
+                                    
+                                    tool_results.append({
+                                        "type": "tool_result",
+                                        "tool_use_id": content_block.id,
+                                        "content": output or "Command completed with no output"
+                                    })
+                                except subprocess.TimeoutExpired:
+                                    tool_results.append({
+                                        "type": "tool_result",
+                                        "tool_use_id": content_block.id,
+                                        "content": "Error: Command timed out after 60 seconds"
+                                    })
+                                except Exception as e:
+                                    tool_results.append({
+                                        "type": "tool_result",
+                                        "tool_use_id": content_block.id,
+                                        "content": f"Error: {str(e)}"
+                                    })
+                    
+                    # Add tool results to messages
+                    messages.append({
+                        "role": "user",
+                        "content": tool_results
+                    })
+                    
+                    # Log updated messages array
+                    log_to_file("1.1 File Partitions Prompt", json.dumps(messages, indent=2))
+                else:
+                    # Unexpected stop reason
+                    print(f"⚠️  Unexpected stop reason: {response.stop_reason}")
+                    break
+            
+            if iteration >= max_iterations:
+                print(f"⚠️  Reached maximum iterations ({max_iterations})")
+                print("Claude may not have completed the task")
+            
+            print(f"\n✅ Claude agent execution finished")
             
         except Exception as e:
             print(f"❌ Error executing Claude agent: {e}")

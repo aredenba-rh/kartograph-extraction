@@ -1,3 +1,4 @@
 pyyaml>=6.0
-claude-agent-sdk
+anthropic[vertex]
+python-dotenv
 
