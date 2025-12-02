@@ -35,8 +35,13 @@ def log_to_file(key: str, value):
     
     # Load existing logs or create new dict
     if log_file.exists():
-        with open(log_file, 'r') as f:
-            logs = json.load(f)
+        try:
+            with open(log_file, 'r') as f:
+                logs = json.load(f)
+        except json.JSONDecodeError:
+            # If the file is corrupted, start fresh
+            print("⚠️  Warning: logging.json was corrupted, starting fresh log file")
+            logs = {}
     else:
         logs = {}
     
@@ -70,8 +75,12 @@ def log_message(step_name: str, attempt_num: int, message_num: int, message, mes
     
     # Load existing logs
     if log_file.exists():
-        with open(log_file, 'r') as f:
-            logs = json.load(f)
+        try:
+            with open(log_file, 'r') as f:
+                logs = json.load(f)
+        except json.JSONDecodeError:
+            # If the file is corrupted, start fresh
+            logs = {}
     else:
         logs = {}
     
@@ -148,8 +157,12 @@ def finalize_attempt_log(step_name: str, attempt_num: int, validation_result: st
     if not log_file.exists():
         return
     
-    with open(log_file, 'r') as f:
-        logs = json.load(f)
+    try:
+        with open(log_file, 'r') as f:
+            logs = json.load(f)
+    except json.JSONDecodeError:
+        # If the file is corrupted, we can't finalize
+        return
     
     if step_name not in logs or len(logs[step_name]["attempts"]) < attempt_num:
         return
@@ -324,6 +337,19 @@ def reset_partitions_folder():
         print(f"  ✓ Partitions folder already empty")
 
 
+def reset_logging():
+    """Reset the logging.json file to start fresh"""
+    log_dir = Path("logging")
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / "logging.json"
+    
+    # Overwrite with empty JSON object
+    with open(log_file, 'w') as f:
+        json.dump({}, f, indent=2, ensure_ascii=False)
+    
+    print(f"  ✓ Reset logging file")
+
+
 def print_usage_summary(step_name: str):
     """
     Print a summary of message statistics for a step from the log file.
@@ -478,11 +504,11 @@ def step_1_create_file_partitions() -> bool:
     # RESET: Clear existing partitions and checklist before starting
     # ========================================================================
     print("\n" + "=" * 60)
-    print("RESETTING WORKFLOW FOR FRESH START")
+    print("RESETTING STEP 1 ARTIFACTS")
     print("=" * 60)
     print()
     
-    # Remove existing partitions
+    # Remove existing partitions (only when we're recreating them)
     reset_partitions_folder()
     
     # Reset the checklist for this step
@@ -772,12 +798,15 @@ def show_workflow_status(config: Dict):
 def main():
     """Main workflow orchestration"""
     # ========================================================================
-    # RESET: Reset master checklist at the beginning of workflow
+    # RESET: Reset all workflow artifacts at the beginning
     # ========================================================================
     print("\n" + "=" * 60)
     print("INITIALIZING EXTRACTION WORKFLOW")
     print("=" * 60)
     print()
+    
+    # Reset the logging file for a fresh start
+    reset_logging()
     
     # Reset the master checklist
     reset_checklist("master_checklist")

@@ -1,5 +1,4 @@
 {
   "use_current_partition": false,
-  "use_current_ontologies": true,
-  "data_source": "rosa-kcs"
+  "use_current_ontologies": true
 }
