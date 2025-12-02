@@ -1,7 +1,7 @@
 {
   "partition_id": 1,
-  "title": "ROSA Knowledge Base Solutions",
-  "description": "Comprehensive collection of Knowledge Centered Support (KCS) solution articles for Red Hat OpenShift Service on AWS (ROSA) and OpenShift Container Platform. These 764 articles cover configuration, troubleshooting, installation, networking, authentication, autoscaling, storage, operators, and other technical support topics. Each article provides detailed issue descriptions, resolutions, and environment specifications to help users resolve common challenges when working with ROSA and OpenShift.",
+  "title": "ROSA Knowledge Center Solutions",
+  "description": "Comprehensive collection of Red Hat OpenShift Service on AWS (ROSA) and OpenShift Dedicated (OSD) knowledge base articles. These solution documents cover a wide range of topics including cluster management, authentication, networking, storage, autoscaling, monitoring, security, troubleshooting, and AWS integration. The articles provide technical guidance, troubleshooting steps, configuration instructions, and best practices for ROSA/OSD deployments.",
   "paths": [
     "kcs_solutions/"
   ],
