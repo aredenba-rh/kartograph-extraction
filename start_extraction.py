@@ -504,32 +504,38 @@ def build_partition_creation_prompt(data_source_path: str, special_commands: Lis
     # Format special commands for display
     commands_list = "\n".join([f"  - `{cmd}`" for cmd in special_commands])
     
-    prompt = f"""I'm building an Knowledge Graph-powered AI Assistant to answer customer questions. We're creating this Knowledge Graph from the data source located at {data_source_path}.
+    prompt = f"""I'm building a Knowledge Graph from {data_source_path}.
+
+## Success Pattern (Follow These Steps)
+1. **Explore**: Quick `ls`/`find` of {data_source_path} to understand structure and content relationships
+2. **Decide**: Single partition (flat/homogeneous content) OR multiple (distinct domains)
+3. **Plan**: Create scratch files in `/tmp/` to track which files go in each partition title
+4. **Create**: Run `make create-partition` for each partition
+5. **Validate**: Run `make validate-partitions`
+6. **Complete**: Respond without tools when validation passes
+
+**Target**: ≤20 bash commands. Single partition is valid for flat directories with related content.
 
 ## Your Task
+Create partitions for all files in {data_source_path}. Each file must appear in exactly one partition. 
 
-Step 1 of this Knowledge Graph creation process: Create a partition of all files/paths at {data_source_path}. 
-The ontology creation and entity/relationship extraction come later.
 
 ## Available Commands
-
 You have access to a **bash tool** that allows you to execute shell commands. However, you should ONLY use these specific make commands:
-
 {commands_list}
-
 **Important:** Do NOT run scripts directly from the `scripts/` folder. Use only the make commands listed above.
 
-## Example Partition Structure
 
-See `{example_partition_path}/` for a working example:
+## Example Partition Structure
+**You will treat the {data_source_path} similar to how {example_partition_path}/data/data_source_repo_name/ is treated.
+
+See `{example_partition_path}/data/data_source_repo_name/` for a working example (You will treat ):
 - **Data**: 7 files in `{example_partition_path}/data/data_source_repo_name/` (2 folders, 3 top-level files)
-- **Partitions**: 2 partition files demonstrating complete, disjoint coverage
-  - `partition_01.json`: Uses directory path `folderA/` (all files) + specific files from `folderB/` + 2 top-level files
-  - `partition_02.json`: Remaining file from `folderB/` + 1 top-level file
+- **Partitions**: 2 partition files (`partition_01.json`, and `partition_02.json`) created using the `make create-partition` command.
 - **Key Rule**: Every file appears exactly once across all partitions
 
-## How to Create Partitions
 
+## How to Create Partitions
 Call `make create-partition` with the required arguments:
 
 ```bash
@@ -541,34 +547,26 @@ make create-partition TITLE='<title>' DESC='<description>' PATHS='<path1> [path2
 - `<description>`: 3-4 sentences describing the files in this partition - their common characteristics, and their role relative to all the files at {data_source_path}.
 - `<path1> [path2] ...`: One or more file/directory paths to include
 
-**Path notation:**
-- Directory (with `/`): `"{data_source_path}/subfolder/"` = ALL files in that directory
-- Specific file: `"{data_source_path}/file.md"` = single file
-- All paths relative from project root
+**Path notation (CRITICAL - paths are relative to {data_source_path}):**
+- Directory: `"subfolder/"` = ALL files in {data_source_path}/subfolder/
+- Directory: `"subfolder/nested/"` = ALL files in nested directory
+- Specific file: `"subfolder/file.md"` = single file
+- Top-level files: `"file.md"`
+
+**DO NOT include `{data_source_path}` in PATHS - it's automatically prepended**
+
+**Shell escaping**: Filenames containing special characters like `(` or `)` must be escaped with a backslash when using the 'make create-partition' command. (e.g. `file-(name).md` -> `file-\(name\).md`)
 
 **Example** (see `{example_partition_path}/partition_01.json` for actual structure):
 ```bash
 make create-partition \\
-  TITLE='Core Documentation' \\
-  DESC='Primary documentation files ...' \\
-  PATHS='data/data_source_repo_name/folderA/ data/data_source_repo_name/folderB/fileBA.md data/data_source_repo_name/fileA.md'
+  TITLE='Installation and Provisioning' \\
+  DESC='Documentation focused on cluster installation ...' \\
+  PATHS='folderA/ folderB/fileBA.md fileA.md'
 ```
 
-## Success Criteria
 
-A successful partition structure must:
-1. ✅ Cover ALL files in {data_source_path}
-2. ✅ Have NO duplicate coverage (each file in exactly one partition)
-3. ✅ Have NO missing files
-4. ✅ Use logical groupings that make sense for knowledge graph extraction
-
-After you create your partitions, the system will automatically validate them. If there are issues, you'll receive detailed feedback about which files are duplicated or missing.
-
-Good luck! Start by exploring the contents of {data_source_path}, then create appropriate partitions using make create-partition. 
-Once you've created your partitions, run `make validate-partitions` to validate them.
-If there are issues, you'll receive detailed feedback about which files are duplicated or missing.
-
-**When complete**: After you've created all necessary partitions and validated them, your task is done. At that point, send a response WITHOUT using any tools (response.stop_reason == "end_turn") to signal completion.
+Complete the steps of **Success Pattern** above.
 """
     return prompt
 

@@ -1,7 +1,7 @@
 {
   "partition_id": 1,
-  "title": "Core Documentation",
-  "description": "Primary documentation files including all of folderA, specific fileBA from folderB, and top-level files A and B. These files represent the main documentation set for the knowledge graph.",
+  "title": "Installation and Provisioning",
+  "description": "Documentation focused on cluster installation, setup, provisioning, and initial configuration.",
   "paths": [
     "examples/partition_example/data/data_source_repo_name/folderA/",
     "examples/partition_example/data/data_source_repo_name/folderB/fileBA.md",

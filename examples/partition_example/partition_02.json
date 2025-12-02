@@ -1,7 +1,7 @@
 {
   "partition_id": 2,
-  "title": "Supporting Resources",
-  "description": "Secondary supporting documentation including specific fileBB from folderB and top-level fileC. These files provide supplementary information and supporting context.",
+  "title": "Security and Authentication",
+  "description": "Documentation focused on security and authentication best practices, including authentication methods, authorization mechanisms, and security protocols.",
   "paths": [
     "examples/partition_example/data/data_source_repo_name/folderB/fileBB.md",
     "examples/partition_example/data/data_source_repo_name/fileC.md"
