@@ -9,7 +9,7 @@ Checks:
 4. No non-existent files are referenced
 
 Note: Partition files use relative paths (e.g., "kcs_solutions/file.md") which are
-resolved against the data_source path from extraction_config.json (e.g., "data/rosa-kcs/").
+resolved against the auto-detected data source path (e.g., "data/rosa-kcs/").
 """
 
 import json
@@ -19,28 +19,32 @@ from pathlib import Path
 from typing import List, Dict, Set, Tuple
 
 
-def load_extraction_config() -> Dict:
-    """Load extraction configuration to get data source."""
-    config_file = Path("extraction_config.json")
-    if not config_file.exists():
-        print("❌ extraction_config.json not found")
-        sys.exit(1)
-    
-    with open(config_file, 'r') as f:
-        config = json.load(f)
-    
-    if 'data_source' not in config:
-        print("❌ 'data_source' field missing in extraction_config.json")
-        sys.exit(1)
-    
-    return config
-
-
 def get_data_source_path() -> str:
-    """Get the full data source path (e.g., 'data/rosa-kcs')."""
-    config = load_extraction_config()
-    data_source = config['data_source']
-    return f"data/{data_source}"
+    """
+    Get the data source path by auto-detecting the single subdirectory in data/.
+    
+    Returns:
+        Full path to the data source (e.g., "data/rosa-kcs")
+    """
+    data_dir = Path("data")
+    
+    if not data_dir.exists():
+        print("❌ data/ directory does not exist")
+        sys.exit(1)
+    
+    # Get all subdirectories in data/
+    subdirs = [d for d in data_dir.iterdir() if d.is_dir()]
+    
+    if len(subdirs) == 0:
+        print("❌ No subdirectories found in data/")
+        sys.exit(1)
+    
+    if len(subdirs) > 1:
+        print(f"❌ Multiple data sources found in data/: {[d.name for d in subdirs]}")
+        print("   Expected only one data source directory")
+        sys.exit(1)
+    
+    return str(subdirs[0])
 
 
 def load_partition_files(partitions_dir: str = "partitions") -> List[Dict]:
