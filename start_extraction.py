@@ -53,6 +53,27 @@ def log_to_file(key: str, value):
         json.dump(logs, f, indent=2, ensure_ascii=False)
 
 
+def log_prompt_to_file(prompt_name: str, prompt_content: str):
+    """
+    Log a prompt to a separate text file for better readability.
+    
+    Args:
+        prompt_name: Name of the prompt (used as filename)
+        prompt_content: The actual prompt text content
+    """
+    log_dir = Path("logging")
+    log_dir.mkdir(exist_ok=True)
+    
+    # Create filename from prompt name
+    prompt_file = log_dir / f"{prompt_name}.txt"
+    
+    # Write prompt as plain text with actual newlines
+    with open(prompt_file, 'w', encoding='utf-8') as f:
+        f.write(prompt_content)
+    
+    print(f"  ✓ Logged prompt to {prompt_file}")
+
+
 def log_message(step_name: str, attempt_num: int, message_num: int, message, message_type: str):
     """
     Log messages from Claude Agent SDK interactions.
@@ -535,8 +556,8 @@ def step_1_create_file_partitions() -> bool:
     # Build the initial prompt
     user_message = build_partition_creation_prompt(data_source_path, special_commands)
     
-    # Log the initial prompt (only once, before retry loop)
-    log_to_file("step_1.1_file_partitions_prompt", user_message)
+    # Log the initial prompt to a text file (only once, before retry loop)
+    log_prompt_to_file("step_1_1_file_partitions_prompt", user_message)
     
     step_name = "step_1.1_file_partitions"
     
