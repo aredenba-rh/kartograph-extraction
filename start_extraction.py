@@ -508,13 +508,12 @@ def build_partition_creation_prompt(data_source_path: str, special_commands: Lis
 
 ## Success Pattern (Follow These Steps)
 1. **Explore**: Quick `ls`/`find` of {data_source_path} to understand structure and content relationships
-2. **Decide**: Single partition (flat/homogeneous content) OR multiple (distinct domains)
 3. **Plan**: Create scratch files in `/tmp/` to track which files go in each partition title
 4. **Create**: Run `make create-partition` for each partition
 5. **Validate**: Run `make validate-partitions`
 6. **Complete**: Respond without tools when validation passes
 
-**Target**: ≤20 bash commands. Single partition is valid for flat directories with related content.
+**Target**: ≤20 bash commands.
 
 ## Your Task
 Create partitions for all files in {data_source_path}. Each file must appear in exactly one partition. 
@@ -562,7 +561,7 @@ make create-partition TITLE='<title>' DESC='<description>' PATHS='<path1> [path2
 make create-partition \\
   TITLE='Installation and Provisioning' \\
   DESC='Documentation focused on cluster installation ...' \\
-  PATHS='folderA/ folderB/fileBA.md fileA.md'
+  PATHS='folderA/ folderB/fileBA.md fileA.md fileB.md'
 ```
 
 

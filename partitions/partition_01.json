@@ -1,7 +1,7 @@
 {
   "partition_id": 1,
-  "title": "Installation and Setup",
-  "description": "Cluster installation, setup, provisioning, and initial configuration",
+  "title": "ROSA Knowledge Base Solutions",
+  "description": "Comprehensive collection of Knowledge Centered Support (KCS) solution articles for Red Hat OpenShift Service on AWS (ROSA) and OpenShift Container Platform. These 764 articles cover configuration, troubleshooting, installation, networking, authentication, autoscaling, storage, operators, and other technical support topics. Each article provides detailed issue descriptions, resolutions, and environment specifications to help users resolve common challenges when working with ROSA and OpenShift.",
   "paths": [
     "kcs_solutions/"
   ],
