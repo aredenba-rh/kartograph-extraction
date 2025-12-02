@@ -74,12 +74,12 @@ def log_prompt_to_file(prompt_name: str, prompt_content: str):
     print(f"  ✓ Logged prompt to {prompt_file}")
 
 
-def log_message(step_name: str, attempt_num: int, message_num: int, message, message_type: str):
+def log_message(step_name: str, attempt_num: int, message_num: int, message, message_type: str, processed_message_ids: set):
     """
     Log messages from Claude Agent SDK interactions.
     
-    Only logs ResultMessage (the final message). All other messages are tracked
-    via message count statistics.
+    Tracks token usage from assistant messages (deduplicating by message ID) and
+    logs the final ResultMessage with complete content.
     
     Args:
         step_name: Name of the workflow step (e.g., "step_1.1_file_partitions")
@@ -87,6 +87,7 @@ def log_message(step_name: str, attempt_num: int, message_num: int, message, mes
         message_num: Current message number (1-indexed)
         message: The SDK message object
         message_type: Type of message (AssistantMessage, ToolUseBlock, ToolResultBlock, TextBlock, ResultMessage, etc.)
+        processed_message_ids: Set of message IDs already processed for token tracking
     """
     from datetime import datetime, timezone
     
@@ -121,7 +122,13 @@ def log_message(step_name: str, attempt_num: int, message_num: int, message, mes
             "validation_result": None,
             "validation_errors": None,
             "result_message": None,
-            "message_count": 0
+            "message_count": 0,
+            "token_usage": {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0
+            }
         })
     
     current_attempt = attempts[attempt_num - 1]
@@ -129,7 +136,33 @@ def log_message(step_name: str, attempt_num: int, message_num: int, message, mes
     # Update message count
     current_attempt["message_count"] = message_num
     
-    # Only store the final ResultMessage (full content)
+    # Track token usage from AssistantMessage (avoiding double-counting)
+    # Per SDK docs: usage is a dictionary, access with .get()
+    if message_type == "AssistantMessage" and hasattr(message, 'usage') and hasattr(message, 'id'):
+        message_id = message.id
+        
+        # Only process this message ID once to avoid double-counting parallel tool uses
+        if message_id not in processed_message_ids:
+            processed_message_ids.add(message_id)
+            
+            usage = message.usage
+            # Debug: Print what we're seeing in the usage object
+            print(f"[DEBUG] Captured usage from AssistantMessage {message_id}: {usage}")
+            
+            # Usage is a dictionary - use .get() for access
+            if isinstance(usage, dict):
+                current_attempt["token_usage"]["input_tokens"] += usage.get("input_tokens", 0)
+                current_attempt["token_usage"]["output_tokens"] += usage.get("output_tokens", 0)
+                current_attempt["token_usage"]["cache_creation_input_tokens"] += usage.get("cache_creation_input_tokens", 0)
+                current_attempt["token_usage"]["cache_read_input_tokens"] += usage.get("cache_read_input_tokens", 0)
+            else:
+                # Fallback to getattr if it's an object
+                current_attempt["token_usage"]["input_tokens"] += getattr(usage, 'input_tokens', 0)
+                current_attempt["token_usage"]["output_tokens"] += getattr(usage, 'output_tokens', 0)
+                current_attempt["token_usage"]["cache_creation_input_tokens"] += getattr(usage, 'cache_creation_input_tokens', 0)
+                current_attempt["token_usage"]["cache_read_input_tokens"] += getattr(usage, 'cache_read_input_tokens', 0)
+    
+    # Store the final ResultMessage (full content) and extract cumulative usage
     if message_type == "ResultMessage":
         result_data = {
             "message_type": "ResultMessage",
@@ -144,14 +177,29 @@ def log_message(step_name: str, attempt_num: int, message_num: int, message, mes
         if hasattr(message, 'result'):
             result_data["content"] = str(message.result)
         
-        # Extract token usage if available
+        # Per SDK docs: ResultMessage has total_cost_usd directly on it
+        if hasattr(message, 'total_cost_usd'):
+            result_data["total_cost_usd"] = message.total_cost_usd
+            print(f"[DEBUG] Captured total_cost_usd from ResultMessage: ${message.total_cost_usd}")
+        
+        # Extract cumulative usage from ResultMessage (this is the authoritative source)
         if hasattr(message, 'usage'):
             usage = message.usage
-            result_data["token_usage"] = {
-                "input_tokens": getattr(usage, 'input_tokens', None),
-                "output_tokens": getattr(usage, 'output_tokens', None),
-                "total_tokens": getattr(usage, 'input_tokens', 0) + getattr(usage, 'output_tokens', 0)
-            }
+            print(f"[DEBUG] Captured cumulative usage from ResultMessage: {usage}")
+            
+            # ResultMessage contains total cumulative usage - replace attempt totals
+            # Usage is a dictionary - use .get() for access
+            if isinstance(usage, dict):
+                current_attempt["token_usage"]["input_tokens"] = usage.get("input_tokens", 0)
+                current_attempt["token_usage"]["output_tokens"] = usage.get("output_tokens", 0)
+                current_attempt["token_usage"]["cache_creation_input_tokens"] = usage.get("cache_creation_input_tokens", 0)
+                current_attempt["token_usage"]["cache_read_input_tokens"] = usage.get("cache_read_input_tokens", 0)
+            else:
+                # Fallback to getattr if it's an object
+                current_attempt["token_usage"]["input_tokens"] = getattr(usage, 'input_tokens', 0)
+                current_attempt["token_usage"]["output_tokens"] = getattr(usage, 'output_tokens', 0)
+                current_attempt["token_usage"]["cache_creation_input_tokens"] = getattr(usage, 'cache_creation_input_tokens', 0)
+                current_attempt["token_usage"]["cache_read_input_tokens"] = getattr(usage, 'cache_read_input_tokens', 0)
         
         current_attempt["result_message"] = result_data
     
@@ -196,49 +244,53 @@ def finalize_attempt_log(step_name: str, attempt_num: int, validation_result: st
     if validation_errors:
         current_attempt["validation_errors"] = validation_errors
     
-    # Get token usage from result_message if available
-    token_usage = None
-    if "result_message" in current_attempt and current_attempt["result_message"]:
-        token_usage = current_attempt["result_message"].get("token_usage")
-    
-    # Calculate attempt summary statistics
-    total_messages = current_attempt.get("message_count", 0)
-    
-    current_attempt["summary"] = {
-        "total_messages": total_messages,
-        "token_usage": token_usage
-    }
+    # Get token usage from attempt
+    token_usage = current_attempt.get("token_usage", {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0
+    })
     
     # Calculate cumulative statistics across all attempts for this step
     cumulative_messages = 0
     cumulative_input_tokens = 0
     cumulative_output_tokens = 0
-    cumulative_total_tokens = 0
+    cumulative_cache_creation_tokens = 0
+    cumulative_cache_read_tokens = 0
+    cumulative_cost = 0.0
     successful_attempt = None
     
     for idx, attempt in enumerate(logs[step_name]["attempts"]):
-        if "summary" in attempt:
-            cumulative_messages += attempt["summary"].get("total_messages", 0)
-            
-            # Accumulate token usage
-            if attempt["summary"].get("token_usage"):
-                token_data = attempt["summary"]["token_usage"]
-                cumulative_input_tokens += token_data.get("input_tokens", 0) or 0
-                cumulative_output_tokens += token_data.get("output_tokens", 0) or 0
-                cumulative_total_tokens += token_data.get("total_tokens", 0) or 0
+        cumulative_messages += attempt.get("message_count", 0)
+        
+        # Accumulate token usage from attempt
+        if "token_usage" in attempt:
+            token_data = attempt["token_usage"]
+            cumulative_input_tokens += token_data.get("input_tokens", 0)
+            cumulative_output_tokens += token_data.get("output_tokens", 0)
+            cumulative_cache_creation_tokens += token_data.get("cache_creation_input_tokens", 0)
+            cumulative_cache_read_tokens += token_data.get("cache_read_input_tokens", 0)
+        
+        # Sum the SDK-reported cost from each attempt's ResultMessage (authoritative)
+        if "result_message" in attempt and attempt["result_message"]:
+            cumulative_cost += attempt["result_message"].get("total_cost_usd", 0) or 0
         
         if attempt.get("validation_result") == "success":
             successful_attempt = idx + 1
     
+    cumulative_token_usage = {
+        "input_tokens": cumulative_input_tokens,
+        "output_tokens": cumulative_output_tokens,
+        "cache_creation_input_tokens": cumulative_cache_creation_tokens,
+        "cache_read_input_tokens": cumulative_cache_read_tokens
+    }
     logs[step_name]["cumulative_summary"] = {
         "total_attempts": len(logs[step_name]["attempts"]),
         "successful_attempt": successful_attempt,
         "total_messages": cumulative_messages,
-        "cumulative_token_usage": {
-            "input_tokens": cumulative_input_tokens,
-            "output_tokens": cumulative_output_tokens,
-            "total_tokens": cumulative_total_tokens
-        }
+        "cumulative_token_usage": cumulative_token_usage,
+        "total_cost_usd": round(cumulative_cost, 6)
     }
     
     # Write back to file with ensure_ascii=False for readability
@@ -373,7 +425,7 @@ def reset_logging():
 
 def print_usage_summary(step_name: str):
     """
-    Print a summary of message statistics for a step from the log file.
+    Print a summary of message statistics and costs for a step from the log file.
     
     Args:
         step_name: Name of the workflow step
@@ -395,6 +447,23 @@ def print_usage_summary(step_name: str):
     if cumulative.get('successful_attempt'):
         print(f"Successful attempt: #{cumulative.get('successful_attempt')}")
     print(f"Total messages exchanged: {cumulative.get('total_messages', 0)}")
+    
+    # Display token usage and cost
+    token_usage = cumulative.get('cumulative_token_usage', {})
+    if token_usage:
+        print(f"\nToken Usage:")
+        print(f"  Input tokens: {token_usage.get('input_tokens', 0):,}")
+        print(f"  Output tokens: {token_usage.get('output_tokens', 0):,}")
+        cache_creation = token_usage.get('cache_creation_input_tokens', 0)
+        cache_read = token_usage.get('cache_read_input_tokens', 0)
+        if cache_creation > 0:
+            print(f"  Cache creation tokens: {cache_creation:,}")
+        if cache_read > 0:
+            print(f"  Cache read tokens: {cache_read:,}")
+        
+        total_cost = cumulative.get('total_cost_usd', 0)
+        print(f"\nTotal Cost: ${total_cost:.6f} USD")
+    
     print()
 
 
@@ -589,6 +658,7 @@ def step_1_create_file_partitions() -> bool:
         )
         
         message_count = 0
+        processed_message_ids = set()  # Track message IDs to avoid double-counting token usage
         
         try:
             async with ClaudeSDKClient(options=options) as client:
@@ -609,7 +679,7 @@ def step_1_create_file_partitions() -> bool:
                     message_type = type(message).__name__
                     
                     # Log the message
-                    log_message(step_name, attempt_num, message_count, message, message_type)
+                    log_message(step_name, attempt_num, message_count, message, message_type, processed_message_ids)
                     
                     # Handle different message types
                     if isinstance(message, AssistantMessage):
