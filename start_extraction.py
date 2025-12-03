@@ -966,9 +966,6 @@ def main():
     # Reset the logging file for a fresh start
     reset_logging()
     
-    # Reset the master checklist
-    reset_checklist("master_checklist")
-    
     # Configure Claude agent settings (allow/deny rules)
     data_source_path = get_data_source_path()
     configure_claude_agent_settings(data_source_path)
@@ -982,6 +979,9 @@ def main():
     # Load configuration
     config = load_config()
     show_workflow_status(config)
+
+    # Reset the master checklist before running any steps
+    reset_checklist("master_checklist")
     
     # Determine which steps to execute (True = execute, False = skip)
     step_1 = not config.get('use_current_partition', False)
