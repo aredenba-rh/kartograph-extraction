@@ -7,6 +7,9 @@ data/
 # Logging directory
 logging/
 
+# Partitions (generated during extraction)
+partitions/
+
 # Python
 __pycache__/
 *.py[cod]

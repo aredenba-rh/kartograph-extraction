@@ -489,6 +489,87 @@ def get_data_source_path() -> str:
     return str(subdirs[0])
 
 
+def configure_claude_agent_settings(data_source_path: str):
+    """
+    Configure .claude/settings.local.json with required permissions for the agent.
+    
+    Sets up:
+    - Allow rules for Bash commands (tree, mkdir, chmod, make)
+    - Deny rules for writing/modifying the data source folder
+    
+    Only adds rules if not already present. Does not remove existing rules.
+    
+    Args:
+        data_source_path: Path to the data source directory (e.g., "data/rosa-kcs")
+    """
+    settings_file = Path(".claude/settings.local.json")
+    
+    # Required allow rules for Bash commands
+    required_allow_rules = [
+        "Bash(tree:*)",
+        "Bash(mkdir:*)",
+        "Bash(chmod:*)",
+        "Bash(make:*)"
+    ]
+    
+    # Deny rules for data source protection (file tools and bash commands)
+    required_deny_rules = [
+        f"Write(./{data_source_path}/**)",
+        f"Bash(rm:*{data_source_path}*)",
+        f"Bash(mv:*{data_source_path}*)",
+        f"Bash(cp:*{data_source_path}*)",
+        f"Bash(mkdir:*{data_source_path}*)",
+        f"Bash(touch:*{data_source_path}*)",
+        f"Bash(echo:*>{data_source_path}*)",
+        f"Bash(cat:*>{data_source_path}*)",
+        f"Bash(cd:*{data_source_path}*&&*mkdir*)",
+    ]
+    
+    # Load existing settings or create default structure
+    if settings_file.exists():
+        with open(settings_file, 'r') as f:
+            settings = json.load(f)
+    else:
+        # Create .claude directory if needed
+        settings_file.parent.mkdir(parents=True, exist_ok=True)
+        settings = {"permissions": {"allow": [], "deny": [], "ask": []}}
+    
+    # Ensure permissions structure exists
+    if "permissions" not in settings:
+        settings["permissions"] = {"allow": [], "deny": [], "ask": []}
+    if "allow" not in settings["permissions"]:
+        settings["permissions"]["allow"] = []
+    if "deny" not in settings["permissions"]:
+        settings["permissions"]["deny"] = []
+    
+    modified = False
+    
+    # Add missing allow rules
+    allow_list = settings["permissions"]["allow"]
+    for rule in required_allow_rules:
+        if rule not in allow_list:
+            allow_list.append(rule)
+            modified = True
+            print(f"  ✓ Added allow rule: {rule}")
+    
+    # Add missing deny rules
+    deny_list = settings["permissions"]["deny"]
+    for rule in required_deny_rules:
+        if rule not in deny_list:
+            deny_list.append(rule)
+            modified = True
+    
+    if modified:
+        print(f"  ✓ Added data source protection for {data_source_path}")
+    
+    # Write back to file only if modified
+    if modified:
+        with open(settings_file, 'w') as f:
+            json.dump(settings, f, indent=2)
+    else:
+        print(f"  ✓ Agent settings already configured")
+
+
 def build_partition_creation_prompt(data_source_path: str, special_commands: List[str], example_partition_path: str = "examples/partition_example") -> str:
     """
     Build the user message prompt for Claude to create partitions.
@@ -507,66 +588,53 @@ def build_partition_creation_prompt(data_source_path: str, special_commands: Lis
     prompt = f"""I'm building a Knowledge Graph from {data_source_path}.
 
 ## Success Pattern (Follow These Steps)
-1. **Explore**: Quick `ls`/`find` of {data_source_path} to understand structure and content relationships
-2. **Decide**: Single partition (flat/homogeneous content) OR multiple (distinct domains)
-3. **Plan**: Create scratch files in `/tmp/` to track which files go in each partition title
-4. **Create**: Run `make create-partition` for each partition
-5. **Validate**: Run `make validate-partitions`
-6. **Complete**: Respond without tools when validation passes
+1. **Explore**: Run `find {data_source_path} -type f | wc -l` and `find {data_source_path} -type d | sort` to understand file count and structure
+2. **Plan**: Create scratch files in `/tmp/` to track which files go in each partition title. Single partition is not allowed - there must be multiple partitions.
+3. **Create**: Run `python3 scripts/create_partition.py` for each partition
+4. **Validate**: Run `make validate-partitions`
+5. **Complete**: Respond without tools when validation passes
 
-**Target**: ≤20 bash commands. Single partition is valid for flat directories with related content.
 
 ## Your Task
-Create partitions for all files in {data_source_path}. Each file must appear in exactly one partition. 
+Create partitions for all files in {data_source_path}. 
+**⚠️ CRITICAL: Each file must appear in exactly one partition.**
+**⚠️ CRITICAL: Do NOT modify {data_source_path}** — no creating, moving, deleting, or editing files/folders within the data source. It is read-only.
 
 
 ## Available Commands
-You have access to a **bash tool** that allows you to execute shell commands. However, you should ONLY use these specific make commands:
+You have access to a **bash tool** that allows you to execute shell commands. Use ONLY these commands:
 {commands_list}
-**Important:** Do NOT run scripts directly from the `scripts/` folder. Use only the make commands listed above.
-
-
-## Example Partition Structure
-**You will treat the {data_source_path} similar to how {example_partition_path}/data/data_source_repo_name/ is treated.
-
-See `{example_partition_path}/data/data_source_repo_name/` for a working example (You will treat ):
-- **Data**: 7 files in `{example_partition_path}/data/data_source_repo_name/` (2 folders, 3 top-level files)
-- **Partitions**: 2 partition files (`partition_01.json`, and `partition_02.json`) created using the `make create-partition` command.
-- **Key Rule**: Every file appears exactly once across all partitions
 
 
 ## How to Create Partitions
-Call `make create-partition` with the required arguments:
-
 ```bash
-make create-partition TITLE='<title>' DESC='<description>' PATHS='<path1> [path2] ...'
+python3 scripts/create_partition.py "<title>" "<description>" <path1> [path2] ...
 ```
 
 **Arguments:**
-- `<title>`: Concise label/title (≤8 words) describing the partition's content (Title should concisely indicate the purpose of this group of files).
-- `<description>`: 3-4 sentences describing the files in this partition - their common characteristics, and their role relative to all the files at {data_source_path}.
-- `<path1> [path2] ...`: One or more file/directory paths to include
+- `<title>`: Concise label (≤8 words) describing the partition's content
+- `<description>`: 2-3 sentences describing the files and their common characteristics
+- `<paths>`: File/directory paths relative to {data_source_path}
 
-**Path notation (CRITICAL - paths are relative to {data_source_path}):**
-- Directory: `"subfolder/"` = ALL files in {data_source_path}/subfolder/
-- Directory: `"subfolder/nested/"` = ALL files in nested directory
+**Path notation (paths are relative to {data_source_path}):**
+- Directory: `"subfolder/"` = ALL files in that directory (can only use once!)
 - Specific file: `"subfolder/file.md"` = single file
 - Top-level files: `"file.md"`
 
 **DO NOT include `{data_source_path}` in PATHS - it's automatically prepended**
 
-**Shell escaping**: Filenames containing special characters like `(` or `)` must be escaped with a backslash when using the 'make create-partition' command. (e.g. `file-(name).md` -> `file-\(name\).md`)
 
-**Example** (see `{example_partition_path}/partition_01.json` for actual structure):
+## Example
+The partitions at `{example_partition_path}/` were created from `{example_partition_path}/data/data_source_repo_name/`:
+
 ```bash
-make create-partition \\
-  TITLE='Installation and Provisioning' \\
-  DESC='Documentation focused on cluster installation ...' \\
-  PATHS='folderA/ folderB/fileBA.md fileA.md fileB.md'
+python3 scripts/create_partition.py \\
+  "Installation and Provisioning" \\
+  "Documentation focused on cluster installation..." \\
+  folderA/ folderB/fileBA.md fileA.md fileB.md
 ```
 
-
-Complete the steps of **Success Pattern** above.
+Complete the steps of "## Success Pattern" above.
 """
     return prompt
 
@@ -899,6 +967,10 @@ def main():
     
     # Reset the master checklist
     reset_checklist("master_checklist")
+    
+    # Configure Claude agent settings (allow/deny rules)
+    data_source_path = get_data_source_path()
+    configure_claude_agent_settings(data_source_path)
     
     print()
     
