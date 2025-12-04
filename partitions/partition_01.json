@@ -1,7 +1,7 @@
 {
   "partition_id": 1,
-  "title": "Installation and Cluster Creation",
-  "description": "Knowledge base articles covering ROSA cluster installation, provisioning, and initial setup. Includes documentation on cluster deployment options, prerequisites, and installation troubleshooting.",
+  "title": "Installation and Provisioning",
+  "description": "Knowledge base articles focused on installing, provisioning, and deploying ROSA clusters. These articles cover cluster creation workflows, deployment prerequisites, installation errors, IAM roles configuration, OIDC setup, and troubleshooting initial provisioning failures across both Classic and HCP deployment models.",
   "paths": [
     "kcs_solutions/5682881-cloud-credential-operator-s3-not-found-in-openshift-container-platform-4..md",
     "kcs_solutions/6068211-user-has-exceeded-the-maximum-number-of-offline-sessions-message-when-trying-to-retrieve-offline-acc.md",

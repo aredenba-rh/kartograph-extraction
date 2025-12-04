@@ -1,0 +1,13 @@
+{
+  "relationships": [
+    {
+      "relationship_id": "1",
+      "type": "DOCUMENTS",
+      "source_entity_type": "KCS Article",
+      "target_entity_type": "Red Hat Product",
+      "description": "Indicates that a KCS Article documents troubleshooting steps, configurations, or best practices for a specific Red Hat Product.",
+      "example_file": "data/rosa-kcs/kcs_solutions/5682881-cloud-credential-operator-s3-not-found-in-openshift-container-platform-4.md",
+      "example_in_file": "KCS 5682881 -> DOCUMENTS -> Openshift Container Platform 4"
+    }
+  ]
+}

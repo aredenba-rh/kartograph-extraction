@@ -1,0 +1,18 @@
+{
+  "entities": [
+    {
+      "entity_id": "1",
+      "type": "Red Hat Product",
+      "example_file": "data/rosa-kcs/kcs_solutions/5682881-cloud-credential-operator-s3-not-found-in-openshift-container-platform-4.md",
+      "description": "A Red Hat product involved in the given KCS article.",
+      "example_in_file": "Openshift Container Platform 4"
+    },
+    {
+      "entity_id": "2",
+      "type": "KCS Article",
+      "example_files": "data/rosa-kcs/kcs_solutions/5682881-cloud-credential-operator-s3-not-found-in-openshift-container-platform-4.md",
+      "description": "KCS solution article that document troubleshooting steps, configurations, and best practices for ROSA. (Example here: Cloud Credential Operator S3 Not Found in Openshift Container Platform 4)",
+      "example_in_file": "KCS 5682881"
+    }
+  ]
+}

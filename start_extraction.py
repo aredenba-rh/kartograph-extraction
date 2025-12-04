@@ -602,6 +602,7 @@ Create partitions for all files in {data_source_path}.
 - **Each file must appear in exactly one partition** (no duplicates, no missing files)
 - **Do NOT modify {data_source_path}** — it is read-only
 
+
 ## Available Commands
 You have access to a **bash tool** that allows you to execute shell commands. Use ONLY these commands:
 {commands_list}
@@ -894,41 +895,515 @@ Once you've fixed the issues, run `make validate-partitions` to verify.
     return False
 
 
+def get_all_partitions() -> List[Dict]:
+    """
+    Get list of all partition files with their data.
+    
+    Returns:
+        List of partition dictionaries with partition_id, title, paths, etc.
+    """
+    partitions_dir = Path("partitions")
+    
+    if not partitions_dir.exists():
+        return []
+    
+    partitions = []
+    for file_path in sorted(partitions_dir.glob("partition_*.json")):
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+            data["_file_path"] = str(file_path)
+            partitions.append(data)
+    
+    return partitions
+
+
+def generate_ontology_checklist(partitions: List[Dict], data_source_path: str) -> Dict:
+    """
+    Generate the 02_create_ontologies_for_each_partition.json checklist dynamically.
+    
+    Creates a checklist where each partition is an item, and each file in the partition
+    is a subtask. The first subtask is always the partition JSON file itself.
+    
+    Args:
+        partitions: List of partition data dictionaries
+        data_source_path: Path to the data source directory
+        
+    Returns:
+        The generated checklist dictionary
+    """
+    checklist = {
+        "checklist_id": "02_create_ontologies_for_each_partition",
+        "title": "Create Ontologies for Each Partition",
+        "description": "Define entity and relationship ontologies for each partition",
+        "special_commands": [
+            "python scripts/create_entity.py",
+            "python scripts/create_relationship.py",
+            "python scripts/mark_subtask.py",
+            "python scripts/all_subtasks_done.py"
+        ],
+        "items": []
+    }
+    
+    for partition in partitions:
+        partition_id = partition.get("partition_id")
+        title = partition.get("title", "Unknown")
+        paths = partition.get("paths", [])
+        
+        # Create item ID (e.g., "2.1" for partition 1, "2.2" for partition 2)
+        item_id = f"2.{partition_id}"
+        
+        # Create the item for this partition
+        item = {
+            "item_id": item_id,
+            "description": f"Create entity and relationship ontologies for partition_{partition_id:02d}.json: {title}",
+            "completed": False,
+            "subtasks": []
+        }
+        
+        # First subtask is always the partition JSON file itself
+        item["subtasks"].append({
+            "item_id": f"{item_id}.1",
+            "file": f"partitions/partition_{partition_id:02d}.json",
+            "description": f"Review entire partition and create complete ontologies",
+            "completed": False
+        })
+        
+        # Add a subtask for each file in the partition
+        subtask_num = 2
+        for path in paths:
+            # Build full path relative to data source
+            full_path = f"{data_source_path}/{path}" if not path.startswith(data_source_path) else path
+            
+            item["subtasks"].append({
+                "item_id": f"{item_id}.{subtask_num}",
+                "file": full_path,
+                "completed": False
+            })
+            subtask_num += 1
+        
+        checklist["items"].append(item)
+    
+    return checklist
+
+
+def reset_ontologies_folder():
+    """Remove all ontology JSON files from ontologies/ folder"""
+    ontologies_dir = Path("ontologies")
+    
+    if not ontologies_dir.exists():
+        ontologies_dir.mkdir(parents=True, exist_ok=True)
+        print(f"  ✓ Created ontologies/ directory")
+        return
+    
+    # Remove all partition ontology JSON files
+    entity_files = list(ontologies_dir.glob("partition_*_entity_ontology.json"))
+    relationship_files = list(ontologies_dir.glob("partition_*_relationship_ontology.json"))
+    all_files = entity_files + relationship_files
+    
+    if all_files:
+        for ontology_file in all_files:
+            ontology_file.unlink()
+        print(f"  ✓ Removed {len(all_files)} existing ontology file(s)")
+    else:
+        print(f"  ✓ Ontologies folder already empty")
+
+
+def init_partition_ontologies(partitions: List[Dict]) -> int:
+    """
+    Initialize empty ontology files for each partition.
+    
+    Args:
+        partitions: List of partition data dictionaries
+        
+    Returns:
+        Number of ontology file pairs created
+    """
+    ontologies_dir = Path("ontologies")
+    ontologies_dir.mkdir(parents=True, exist_ok=True)
+    
+    created_count = 0
+    
+    for partition in partitions:
+        partition_id = partition.get("partition_id")
+        
+        # Create entity ontology file
+        entity_filename = f"partition_{partition_id:02d}_entity_ontology.json"
+        entity_path = ontologies_dir / entity_filename
+        
+        entity_ontology = {"entities": []}
+        
+        with open(entity_path, 'w') as f:
+            json.dump(entity_ontology, f, indent=2)
+        
+        # Create relationship ontology file
+        relationship_filename = f"partition_{partition_id:02d}_relationship_ontology.json"
+        relationship_path = ontologies_dir / relationship_filename
+        
+        relationship_ontology = {"relationships": []}
+        
+        with open(relationship_path, 'w') as f:
+            json.dump(relationship_ontology, f, indent=2)
+        
+        print(f"  ✓ Created ontologies for partition {partition_id}: {partition.get('title', 'Unknown')}")
+        created_count += 1
+    
+    return created_count
+
+
+def build_ontology_creation_prompt(partition: Dict, data_source_path: str, item_id: str) -> str:
+    """
+    Build the user message prompt for Claude to create ontologies for a partition.
+    
+    Args:
+        partition: The partition data dictionary
+        data_source_path: Path to the data source directory
+        item_id: The checklist item ID for this partition (e.g., "2.1")
+        
+    Returns:
+        Formatted prompt string
+    """
+    partition_id = partition.get("partition_id")
+    title = partition.get("title", "Unknown")
+    description = partition.get("description", "")
+    paths = partition.get("paths", [])
+    file_count = len(paths)
+    
+    # Build file list preview (first 10 files)
+    file_preview = "\n".join([f"  - {p}" for p in paths[:10]])
+    if len(paths) > 10:
+        file_preview += f"\n  ... and {len(paths) - 10} more files"
+    
+    prompt = f"""I'm building a Knowledge Graph from {data_source_path}. You are assigned to create ontologies for **Partition {partition_id}**.
+
+## Your Partition Assignment
+
+**Partition {partition_id}: {title}**
+- Description: {description}
+- Files: {file_count} files
+- File list preview:
+{file_preview}
+
+## Success Pattern (Follow These Steps)
+
+1. **Review Partition**: Read `partitions/partition_{partition_id:02d}.json` to understand all files in your partition
+2. **Analyze Files**: Read several representative files to understand the content, entities, and relationships present
+3. **Create Entity Ontology**: For each distinct entity TYPE you identify, run:
+   ```bash
+   python scripts/create_entity.py {partition_id} "<entity_type>" "<description>" "<example_file>" "<example_in_file>"
+   ```
+4. **Create Relationship Ontology**: For each distinct relationship TYPE you identify, run:
+   ```bash
+   python scripts/create_relationship.py {partition_id} "<type>" "<source_entity_type>" "<target_entity_type>" "<description>" "<example_file>" "<example_in_file>"
+   ```
+5. **Mark Subtask Complete**: After creating ALL entities and relationships for the partition:
+   ```bash
+   python scripts/mark_subtask.py {item_id} {item_id}.1
+   ```
+6. **Verify Each File**: For each file subtask (2.X.2 through 2.X.N), verify entities/relationships are captured:
+   ```bash
+   python scripts/mark_subtask.py {item_id} {item_id}.<subtask_num>
+   ```
+7. **Final Check**: Run `python scripts/all_subtasks_done.py {item_id}` to verify completion
+8. **Complete**: Respond without tools when all subtasks are done
+
+
+## Your Goal
+
+Create a **COMPLETE** entity and relationship ontology for this partition that:
+- Captures ALL meaningful entities present in the files
+- Captures ALL meaningful relationships between entities
+- Uses an appropriate level of abstraction (not too granular, not too abstract)
+- Enables COMPLETE UNDERSTANDING of the underlying data through the Knowledge Graph
+
+**CRITICAL**: 
+- Check the existing ontology BEFORE creating each entity/relationship to avoid duplicates
+- The scripts will warn you if you try to create a duplicate
+- Focus on entity/relationship TYPES, not individual instances
+
+
+## Entity and Relationship Structure
+
+**Entity Example** (from examples/ontology_example/example_entity_ontology.json):
+```json
+{{
+  "entity_id": "1",
+  "type": "Red Hat Product",
+  "example_file": "data/rosa-kcs/kcs_solutions/example.md",
+  "description": "A Red Hat product involved in the given KCS article.",
+  "example_in_file": "Openshift Container Platform 4"
+}}
+```
+
+**Relationship Example** (from examples/ontology_example/example_relationship_ontology.json):
+```json
+{{
+  "relationship_id": "1",
+  "type": "DOCUMENTS",
+  "source_entity_type": "KCS Article",
+  "target_entity_type": "Red Hat Product",
+  "description": "Indicates that a KCS Article documents troubleshooting steps for a Red Hat Product.",
+  "example_file": "data/rosa-kcs/kcs_solutions/example.md",
+  "example_in_file": "KCS 5682881 -> DOCUMENTS -> Openshift Container Platform 4"
+}}
+```
+
+
+## Available Commands
+
+```bash
+# Create an entity in partition {partition_id}'s ontology
+python scripts/create_entity.py {partition_id} "<type>" "<description>" "<example_file>" "<example_in_file>"
+
+# Create a relationship in partition {partition_id}'s ontology  
+python scripts/create_relationship.py {partition_id} "<type>" "<source_entity_type>" "<target_entity_type>" "<description>" "<example_file>" "<example_in_file>"
+
+# Mark a subtask as complete
+python scripts/mark_subtask.py {item_id} <subtask_item_id>
+
+# Check if all subtasks are done
+python scripts/all_subtasks_done.py {item_id}
+
+# View current entity ontology
+cat ontologies/partition_{partition_id:02d}_entity_ontology.json
+
+# View current relationship ontology
+cat ontologies/partition_{partition_id:02d}_relationship_ontology.json
+```
+
+
+## Environment Variable
+
+Your PARTITION_ITEM_ID is set to `{item_id}`. This allows scripts to know which partition you're working on.
+
+Begin by reading the partition file and a few representative data files to understand the content.
+"""
+    return prompt
+
+
 def step_2_create_ontologies_for_each_partition() -> bool:
     """
-    Execute step 2: Create ontologies for each partition
+    Execute step 2: Create ontologies for each partition using Claude Code Agent SDK
     
-    This is a placeholder for the ontology creation workflow.
+    This function:
+    1. Resets the ontologies/ folder (removes existing ontology files)
+    2. Generates the checklist dynamically from partitions
+    3. Initializes empty ontology files for each partition
+    4. Spawns one Claude agent per partition to create ontologies
+    5. Waits for all agents to complete
+    
+    Returns:
+        True if all ontologies were created successfully
     """
+    from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions, AssistantMessage, ToolUseBlock, ToolResultBlock, TextBlock
+    from datetime import datetime, timezone
+    import asyncio
+    
     # ========================================================================
-    # RESET: Reset checklist for step 2
+    # RESET: Clear existing ontologies and generate checklist
     # ========================================================================
     print("\n" + "=" * 60)
     print("PREPARING STEP 2: ONTOLOGY CREATION")
     print("=" * 60)
     print()
     
-    # Reset the checklist for this step
-    reset_checklist("02_create_ontologies_for_each_partition")
+    # Get data source path
+    data_source_path = get_data_source_path()
+    
+    # Get all partitions
+    partitions = get_all_partitions()
+    
+    if not partitions:
+        print("❌ No partitions found. Run Step 1 first.")
+        return False
+    
+    print(f"  Found {len(partitions)} partitions")
+    
+    # Reset ontologies folder
+    reset_ontologies_folder()
+    
+    # Initialize empty ontology files for each partition
+    init_partition_ontologies(partitions)
+    
+    # Generate the checklist dynamically
+    checklist = generate_ontology_checklist(partitions, data_source_path)
+    save_checklist("02_create_ontologies_for_each_partition", checklist)
+    print(f"  ✓ Generated checklist with {len(checklist['items'])} items")
+    
+    # Count total subtasks
+    total_subtasks = sum(len(item.get("subtasks", [])) for item in checklist["items"])
+    print(f"  ✓ Total subtasks: {total_subtasks}")
     
     print()
     
     # ========================================================================
-    # STEP 2.1: Create Ontologies
+    # STEP 2: Create Ontologies (spawn agent per partition)
     # ========================================================================
     
     print("=" * 60)
-    print("STEP 2.1: Create Ontologies for Each Partition")
+    print("STEP 2: Creating Ontologies for Each Partition")
     print("=" * 60)
     print()
-    print("📋 This step will create entity and relationship ontologies")
-    print("   for each partition created in the previous step.")
-    print()
-    print("⚠️  Ontology creation workflow not yet implemented.")
-    print("   This will be implemented in a future iteration.")
+    print(f"📋 Spawning {len(partitions)} agents (one per partition)")
+    print(f"   Data source: {data_source_path}")
     print()
     
-    return True
+    async def run_ontology_agent(partition: Dict, attempt_num: int = 1) -> tuple[int, bool, Optional[str]]:
+        """
+        Run a Claude agent to create ontologies for a single partition.
+        
+        Args:
+            partition: The partition data dictionary
+            attempt_num: Attempt number for logging
+            
+        Returns:
+            Tuple of (partition_id, success, error_message)
+        """
+        partition_id = partition.get("partition_id")
+        item_id = f"2.{partition_id}"
+        step_name = f"step_2.{partition_id}_ontology_creation"
+        
+        # Build the prompt for this partition
+        prompt = build_ontology_creation_prompt(partition, data_source_path, item_id)
+        
+        # Log the prompt
+        log_prompt_to_file(f"step_2_{partition_id}_ontology_prompt", prompt)
+        
+        # Configure Claude Agent SDK options with partition-specific environment
+        options = ClaudeAgentOptions(
+            allowed_tools=["Bash", "Read", "Write"],
+            permission_mode="acceptEdits",
+            cwd=str(Path.cwd()),
+            env={
+                "PARTITION_ITEM_ID": item_id
+            }
+        )
+        
+        message_count = 0
+        processed_message_ids = set()
+        
+        print(f"🤖 Starting agent for Partition {partition_id}: {partition.get('title', 'Unknown')}")
+        
+        try:
+            async with ClaudeSDKClient(options=options) as client:
+                # Send initial query
+                await client.query(prompt)
+                
+                # Receive all messages until completion
+                async for message in client.receive_messages():
+                    message_count += 1
+                    
+                    # Determine message type for logging
+                    message_type = type(message).__name__
+                    
+                    # Log the message
+                    log_message(step_name, attempt_num, message_count, message, message_type, processed_message_ids)
+                    
+                    # Handle different message types (minimal output to avoid spam)
+                    if isinstance(message, AssistantMessage):
+                        for block in message.content:
+                            if isinstance(block, ToolUseBlock):
+                                if block.name == "Bash":
+                                    command = block.input.get('command', 'N/A')
+                                    cmd_preview = command if len(command) <= 60 else command[:57] + "..."
+                                    print(f"  [P{partition_id}] 🔧 {cmd_preview}")
+                    
+                    # Check for completion
+                    if hasattr(message, 'subtype'):
+                        if message.subtype == 'success':
+                            print(f"  [P{partition_id}] ✅ Completed ({message_count} messages)")
+                            finalize_attempt_log(step_name, attempt_num, "success")
+                            return partition_id, True, None
+                        elif message.subtype == 'error':
+                            error_msg = str(getattr(message, 'result', 'Unknown error'))
+                            print(f"  [P{partition_id}] ❌ Error: {error_msg[:50]}...")
+                            finalize_attempt_log(step_name, attempt_num, "failed", error_msg)
+                            return partition_id, False, error_msg
+                
+                # If we exit the loop without a result message, task is complete
+                print(f"  [P{partition_id}] ✅ Session completed ({message_count} messages)")
+                finalize_attempt_log(step_name, attempt_num, "success")
+                return partition_id, True, None
+                
+        except Exception as e:
+            error_msg = str(e)
+            print(f"  [P{partition_id}] ❌ Exception: {error_msg[:50]}...")
+            finalize_attempt_log(step_name, attempt_num, "failed", error_msg)
+            return partition_id, False, error_msg
+    
+    async def run_all_agents():
+        """Run all partition agents concurrently."""
+        tasks = [run_ontology_agent(partition) for partition in partitions]
+        results = await asyncio.gather(*tasks)
+        return results
+    
+    # Run all agents
+    print(f"\n{'='*60}")
+    print("Running Agents...")
+    print(f"{'='*60}\n")
+    
+    results = asyncio.run(run_all_agents())
+    
+    # Process results
+    print(f"\n{'='*60}")
+    print("Agent Results")
+    print(f"{'='*60}\n")
+    
+    all_success = True
+    for partition_id, success, error in results:
+        if success:
+            print(f"  ✅ Partition {partition_id}: Success")
+        else:
+            print(f"  ❌ Partition {partition_id}: Failed - {error}")
+            all_success = False
+    
+    # Verify all checklist items are complete
+    print(f"\n{'='*60}")
+    print("Verifying Checklist Completion")
+    print(f"{'='*60}\n")
+    
+    final_checklist = load_checklist("02_create_ontologies_for_each_partition")
+    incomplete_items = []
+    
+    for item in final_checklist.get("items", []):
+        if not item.get("completed", False):
+            incomplete_subtasks = [
+                st for st in item.get("subtasks", []) 
+                if not st.get("completed", False)
+            ]
+            if incomplete_subtasks:
+                incomplete_items.append({
+                    "item_id": item.get("item_id"),
+                    "incomplete_count": len(incomplete_subtasks)
+                })
+    
+    if incomplete_items:
+        print("⚠️  Some items are not fully complete:")
+        for item in incomplete_items:
+            print(f"   - {item['item_id']}: {item['incomplete_count']} incomplete subtask(s)")
+        print()
+    else:
+        print("✅ All checklist items are complete!")
+        print()
+    
+    # Count created ontology files
+    ontologies_dir = Path("ontologies")
+    entity_files = list(ontologies_dir.glob("partition_*_entity_ontology.json"))
+    relationship_files = list(ontologies_dir.glob("partition_*_relationship_ontology.json"))
+    
+    print(f"📊 Ontology Files Created:")
+    print(f"   Entity ontologies: {len(entity_files)}")
+    print(f"   Relationship ontologies: {len(relationship_files)}")
+    print(f"   Total: {len(entity_files) + len(relationship_files)}")
+    print()
+    
+    if all_success and not incomplete_items:
+        print("✅ STEP 2 COMPLETE!")
+        print("All ontologies have been created for all partitions.")
+        return True
+    else:
+        print("⚠️  Step 2 completed with some issues.")
+        print("Review the results and incomplete items above.")
+        return all_success
 
 
 def show_workflow_status(config: Dict):
