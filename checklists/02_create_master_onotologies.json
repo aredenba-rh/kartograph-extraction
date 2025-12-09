@@ -1,0 +1,12 @@
+{
+  "checklist_id": "02_create_master_onotologies",
+  "title": "Create Master Entity Ontology and Master Relationship Ontology",
+  "description": "Define the entity and relationship ontologies for the data in context",
+  "special_commands": [
+    "python scripts/create_entity.py",
+    "python scripts/create_relationship.py",
+    "python scripts/mark_subtask.py",
+    "python scripts/all_subtasks_done.py"
+  ],
+  "items": []
+}
