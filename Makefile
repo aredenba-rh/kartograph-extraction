@@ -134,7 +134,7 @@ start-extraction:
 	@echo "║         KGaaS Extraction Workflow - Starting...            ║"
 	@echo "╚════════════════════════════════════════════════════════════╝"
 	@echo ""
-	@python3 start_extraction.py
+	@python3 -m workflow.start_extraction
 
 # Validate that partitions cover all files
 validate-partitions:
