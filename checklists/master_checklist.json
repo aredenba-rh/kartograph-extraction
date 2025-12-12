@@ -6,7 +6,7 @@
     {
       "item_id": "step_01",
       "description": "Create file partitions",
-      "completed": true,
+      "completed": false,
       "sub_checklist": "01_create_file_partitions.json"
     },
     {

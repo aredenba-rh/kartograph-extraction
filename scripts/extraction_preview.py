@@ -11,7 +11,7 @@ from pathlib import Path
 # Add parent directory to path to import workflow modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from workflow.helpers.config import get_data_source_path, configure_claude_agent_settings
+from workflow.helpers.config import get_data_source_path, get_data_sources, configure_claude_agent_settings
 
 
 def get_data_source_path_safe() -> str:
@@ -110,8 +110,12 @@ def main():
     # Configure Claude agent settings (allow/deny rules)
     data_source_path = get_data_source_path_safe()
     if data_source_path:
-        configure_claude_agent_settings(data_source_path)
-        print()
+        try:
+            data_sources = get_data_sources()
+            configure_claude_agent_settings(data_source_path, data_sources)
+            print()
+        except FileNotFoundError:
+            pass  # No data sources yet
     
     show_data_overview()
     show_flags()

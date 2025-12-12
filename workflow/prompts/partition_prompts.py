@@ -34,9 +34,17 @@ def build_partition_creation_prompt(
     
     prompt = f"""I'm building a Knowledge Graph from all data sources in `{data_path}/`.
 
+
 ## Data Sources
 The following data sources exist in `{data_path}/`:
 {data_sources_list}
+
+
+## Your Task
+Create partitions for all files across ALL data sources in `{data_path}/`. 
+- **Each file must appear in exactly one partition** (no duplicates, no missing files)
+- **Do NOT modify `{data_path}/`** — it is read-only
+
 
 ## Success Pattern (Follow These Steps)
 1. **Explore**: Run `find {data_path} -type f | wc -l` and `find {data_path} -type d | sort` to understand file count and structure across ALL data sources
@@ -48,10 +56,7 @@ The following data sources exist in `{data_path}/`:
 5. **Complete**: Respond without tools when validation passes
 
 
-## Your Task
-Create partitions for all files across ALL data sources in `{data_path}/`. 
-- **Each file must appear in exactly one partition** (no duplicates, no missing files)
-- **Do NOT modify `{data_path}/`** — it is read-only
+
 
 
 ## CRITICAL RULE: No Entire Data Sources as Partition Paths
@@ -78,25 +83,18 @@ python3 scripts/create_partition.py "<title>" "<description>" <path1> [path2] ..
 - `<description>`: 2-3 sentences describing the files and their common characteristics
 - `<paths>`: File/directory paths relative to `{data_path}/`
 
-**Path notation (paths are relative to `{data_path}/`):**
-- Directory: `"openshift-docs/subfolder/"` = ALL files in that directory
-- Specific file: `"rosa-kcs/kcs_solutions/file.md"` = single file
-- Top-level files within a data source: `"ops-sop/README.md"`
-
 **Paths MUST include the data source folder name (e.g., `openshift-docs/`, `rosa-kcs/`, `ops-sop/`) as a prefix**
 
 **DO NOT include `{data_path}/` in PATHS - it's automatically prepended**
 
+**Path notation (paths are relative to `{data_path}/`):**
+- Directory: `openshift-docs/subfolder/` = ALL files in that directory
+- Specific file: `rosa-kcs/kcs_solutions/file.md` = single file
+- Top-level files within a data source: `ops-sop/README.md`
+
 
 ## Example Partition Creation
-The partitions at `{example_partition_path}/` could be created from `{example_partition_path}/data/data_source_1/` using commands similar to:
-
-```bash
-python3 scripts/create_partition.py \\
-  "Installation and Provisioning" \\
-  "Documentation focused on cluster installation..." \\
-  data_source_1/folderA/ data_source_1/folderB/fileBA.md
-```
+If you need an example, look at the partitions at `{example_partition_path}/`
 
 Complete the steps of "## Success Pattern" above.
 """
