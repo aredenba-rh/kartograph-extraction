@@ -3,8 +3,8 @@
   "title": "Security and Authentication",
   "description": "Documentation focused on security and authentication best practices, including authentication methods, authorization mechanisms, and security protocols.",
   "paths": [
-    "examples/partition_example/data/data_source_1/folderB/fileBB.md",
-    "examples/partition_example/data/data_source_1/fileC.md"
+    "data_source_1/folderB/fileBB.md",
+    "data_source_1/fileC.md"
   ],
   "entity_ontology": [],
   "relationship_ontology": []

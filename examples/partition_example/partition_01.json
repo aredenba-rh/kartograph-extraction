@@ -3,10 +3,10 @@
   "title": "Installation and Provisioning",
   "description": "Documentation focused on cluster installation, setup, provisioning, and initial configuration.",
   "paths": [
-    "examples/partition_example/data/data_source_1/folderA/",
-    "examples/partition_example/data/data_source_1/folderB/fileBA.md",
-    "examples/partition_example/data/data_source_1/fileA.md",
-    "examples/partition_example/data/data_source_1/fileB.md"
+    "data_source_1/folderA/",
+    "data_source_1/folderB/fileBA.md",
+    "data_source_1/fileA.md",
+    "data_source_1/fileB.md"
   ],
   "entity_ontology": [],
   "relationship_ontology": []
