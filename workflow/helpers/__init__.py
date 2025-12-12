@@ -18,6 +18,7 @@ from .logging import (
 from .config import (
     load_config,
     get_data_source_path,
+    get_data_sources,
     configure_claude_agent_settings,
 )
 from .checklist import (
@@ -43,6 +44,7 @@ __all__ = [
     # config
     "load_config",
     "get_data_source_path",
+    "get_data_sources",
     "configure_claude_agent_settings",
     # checklist
     "load_checklist",

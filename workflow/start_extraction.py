@@ -29,6 +29,7 @@ load_dotenv()
 from .helpers import (
     load_config,
     get_data_source_path,
+    get_data_sources,
     configure_claude_agent_settings,
     reset_checklist,
     reset_logging,
@@ -77,7 +78,8 @@ def main():
     
     # Configure Claude agent settings (allow/deny rules)
     data_source_path = get_data_source_path()
-    configure_claude_agent_settings(data_source_path)
+    data_sources = get_data_sources()
+    configure_claude_agent_settings(data_source_path, data_sources)
     
     print()
     

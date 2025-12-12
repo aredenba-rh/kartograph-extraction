@@ -7,12 +7,18 @@ Provides the prompt for Claude to create file partitions from a data source.
 from typing import List
 
 
-def build_partition_creation_prompt(data_source_path: str, special_commands: List[str], example_partition_path: str = "examples/partition_example") -> str:
+def build_partition_creation_prompt(
+    data_path: str,
+    data_sources: List[str],
+    special_commands: List[str],
+    example_partition_path: str = "examples/partition_example"
+) -> str:
     """
     Build the user message prompt for Claude to create partitions.
     
     Args:
-        data_source_path: Path to the data source directory
+        data_path: Path to the data directory (e.g., "data")
+        data_sources: List of folders (data sources) within the data directory
         special_commands: List of make commands available to the agent
         example_partition_path: Path to example partition structure
         
@@ -22,22 +28,39 @@ def build_partition_creation_prompt(data_source_path: str, special_commands: Lis
     # Format special commands for display
     commands_list = "\n".join([f"  - `{cmd}`" for cmd in special_commands])
     
-    prompt = f"""I'm building a Knowledge Graph from {data_source_path}.
+    # Format data sources list for display
+    data_sources_list = "\n".join([f"  - `{data_path}/{src}/`" for src in data_sources])
+    data_sources_bullets = "\n".join([f"- `{src}/`" for src in data_sources])
+    
+    prompt = f"""I'm building a Knowledge Graph from all data sources in `{data_path}/`.
+
+## Data Sources
+The following data sources exist in `{data_path}/`:
+{data_sources_list}
 
 ## Success Pattern (Follow These Steps)
-1. **Explore**: Run `find {data_source_path} -type f | wc -l` and `find {data_source_path} -type d | sort` to understand file count and structure
+1. **Explore**: Run `find {data_path} -type f | wc -l` and `find {data_path} -type d | sort` to understand file count and structure across ALL data sources
 2. **Plan**: Create scratch files in `/tmp/` to track which files go in each partition title. 
     - Single partition is not allowed - there must be multiple partitions. Use the commands below to create the partitions.
-    - The partitions should be disjoint and cover all files in {data_source_path}.
+    - The partitions should be disjoint and cover all files across ALL data sources in `{data_path}/`.
 3. **Create**: Run `python3 scripts/create_partition.py` for each partition
 4. **Validate**: Run `make validate-partitions`
 5. **Complete**: Respond without tools when validation passes
 
 
 ## Your Task
-Create partitions for all files in {data_source_path}. 
+Create partitions for all files across ALL data sources in `{data_path}/`. 
 - **Each file must appear in exactly one partition** (no duplicates, no missing files)
-- **Do NOT modify {data_source_path}** — it is read-only
+- **Do NOT modify `{data_path}/`** — it is read-only
+
+
+## CRITICAL RULE: No Entire Data Sources as Partition Paths
+You **MUST NOT** use an entire data source folder as a partition path. The following paths are **FORBIDDEN** in any partition:
+{data_sources_bullets}
+
+Instead, you must specify more granular subdirectories or files within each data source. For example:
+- ❌ WRONG: `openshift-docs/`
+- ✅ CORRECT: `openshift-docs/rosa_architecture/`, `openshift-docs/modules/`, etc.
 
 
 ## Available Commands
@@ -53,24 +76,26 @@ python3 scripts/create_partition.py "<title>" "<description>" <path1> [path2] ..
 **Arguments:**
 - `<title>`: Concise label (≤8 words) describing the partition's content
 - `<description>`: 2-3 sentences describing the files and their common characteristics
-- `<paths>`: File/directory paths relative to {data_source_path}
+- `<paths>`: File/directory paths relative to `{data_path}/`
 
-**Path notation (paths are relative to {data_source_path}):**
-- Directory: `"subfolder/"` = ALL files in that directory
-- Specific file: `"subfolder/file.md"` = single file
-- Top-level files: `"file.md"`
+**Path notation (paths are relative to `{data_path}/`):**
+- Directory: `"openshift-docs/subfolder/"` = ALL files in that directory
+- Specific file: `"rosa-kcs/kcs_solutions/file.md"` = single file
+- Top-level files within a data source: `"ops-sop/README.md"`
 
-**DO NOT include `{data_source_path}` in PATHS - it's automatically prepended**
+**Paths MUST include the data source folder name (e.g., `openshift-docs/`, `rosa-kcs/`, `ops-sop/`) as a prefix**
+
+**DO NOT include `{data_path}/` in PATHS - it's automatically prepended**
 
 
 ## Example Partition Creation
-The partitions at `{example_partition_path}/` could be created from `{example_partition_path}/data/data_source_repo_name/` using the commands similar to:
+The partitions at `{example_partition_path}/` could be created from `{example_partition_path}/data/data_source_1/` using commands similar to:
 
 ```bash
 python3 scripts/create_partition.py \\
   "Installation and Provisioning" \\
   "Documentation focused on cluster installation..." \\
-  folderA/ folderB/fileBA.md fileA.md fileB.md
+  data_source_1/folderA/ data_source_1/folderB/fileBA.md
 ```
 
 Complete the steps of "## Success Pattern" above.

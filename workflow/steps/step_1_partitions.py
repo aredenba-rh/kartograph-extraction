@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ..helpers.logging import log_prompt_to_file, finalize_attempt_log, print_usage_summary
-from ..helpers.config import get_data_source_path
+from ..helpers.config import get_data_source_path, get_data_sources
 from ..helpers.checklist import load_checklist, reset_checklist, mark_checklist_item_complete
 from ..helpers.filesystem import reset_partitions_folder
 from ..prompts.partition_prompts import build_partition_creation_prompt
@@ -59,8 +59,9 @@ def step_1_create_file_partitions() -> bool:
     sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
     from confirm_acceptable_partition import validate_and_get_errors
     
-    # Get data source path
+    # Get data source path and list of data sources
     data_source_path = get_data_source_path()
+    data_sources = get_data_sources()
     
     # Load checklist to get special commands for step 1.1
     checklist = load_checklist("01_create_file_partitions")
@@ -68,7 +69,7 @@ def step_1_create_file_partitions() -> bool:
     special_commands = step_1_1.get("special_commands", [])
     
     # Build the initial prompt
-    user_message = build_partition_creation_prompt(data_source_path, special_commands)
+    user_message = build_partition_creation_prompt(data_source_path, data_sources, special_commands)
     
     # Log the initial prompt to a text file (only once, before retry loop)
     log_prompt_to_file("step_1_1_file_partitions_prompt", user_message)
@@ -78,7 +79,8 @@ def step_1_create_file_partitions() -> bool:
     print("=" * 60)
     print("STEP 1.1: Creating File Partitions")
     print("=" * 60)
-    print(f"Data source: {data_source_path}")
+    print(f"Data path: {data_source_path}")
+    print(f"Data sources: {', '.join(data_sources)}")
     print(f"Special commands: {', '.join(special_commands)}")
     print()
     
@@ -163,6 +165,9 @@ def step_1_create_file_partitions() -> bool:
                 print(f"\n🔄 Retrying... (Attempt {attempt + 1}/{max_attempts})")
                 print("Sending error feedback to Claude agent...")
                 
+                # Format forbidden data source paths for error message
+                forbidden_paths = ", ".join([f'"{src}/"' for src in data_sources])
+                
                 # Update user message with error feedback for next iteration
                 user_message = f"""The partitions you created have validation errors. Please fix them.
 
@@ -173,12 +178,14 @@ Please:
 1. Review the errors above
 2. Delete the problematic partition files in partitions/ directory
 3. Create corrected partitions using `make create-partition` command
-4. Ensure complete and disjoint coverage of all files in {data_source_path}
+4. Ensure complete and disjoint coverage of all files across ALL data sources in {data_source_path}
 
 Remember:
 - Each file must appear in exactly ONE partition (no duplicates)
 - ALL files must be covered (no missing files)
 - Use "path/to/directory/" (with trailing slash) to include all files in a directory
+- Paths must include the data source folder name (e.g., "{data_sources[0]}/subfolder/")
+- You CANNOT use entire data sources as paths: {forbidden_paths}
 
 Once you've fixed the issues, run `make validate-partitions` to verify.
 """

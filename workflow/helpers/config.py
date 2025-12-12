@@ -9,7 +9,7 @@ Provides functions for:
 
 import json
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 
 def load_config() -> Dict:
@@ -33,7 +33,22 @@ def load_config() -> Dict:
 def get_data_source_path() -> str:
     """
     Get the data source path to extract from.
-    Returns the first (and only) folder found in data/ directory.
+    Returns the 'data/' directory path.
+    """
+    data_dir = Path("data")
+    
+    if not data_dir.exists():
+        raise FileNotFoundError("data/ directory does not exist")
+    
+    return str(data_dir)
+
+
+def get_data_sources() -> List[str]:
+    """
+    Get a list of all data source folder names in data/ directory.
+    
+    Returns:
+        List of data source folder names (e.g., ["openshift-docs", "ops-sop", "rosa-kcs"])
     """
     data_dir = Path("data")
     
@@ -41,29 +56,27 @@ def get_data_source_path() -> str:
         raise FileNotFoundError("data/ directory does not exist")
     
     # Get all subdirectories in data/
-    subdirs = [d for d in data_dir.iterdir() if d.is_dir()]
+    subdirs = sorted([d.name for d in data_dir.iterdir() if d.is_dir()])
     
     if len(subdirs) == 0:
         raise FileNotFoundError("No subdirectories found in data/")
     
-    if len(subdirs) > 1:
-        raise ValueError(f"Multiple data sources found in data/: {[d.name for d in subdirs]}. Expected only one.")
-    
-    return str(subdirs[0])
+    return subdirs
 
 
-def configure_claude_agent_settings(data_source_path: str):
+def configure_claude_agent_settings(data_path: str, data_sources: List[str]):
     """
     Configure .claude/settings.local.json with required permissions for the agent.
     
     Sets up:
     - Allow rules for Bash commands (tree, mkdir, chmod, make)
-    - Deny rules for writing/modifying the data source folder
+    - Deny rules for writing/modifying all data source folders
     
     Only adds rules if not already present. Does not remove existing rules.
     
     Args:
-        data_source_path: Path to the data source directory (e.g., "data/rosa-kcs")
+        data_path: Path to the data directory (e.g., "data")
+        data_sources: List of data source folder names (e.g., ["openshift-docs", "ops-sop", "rosa-kcs"])
     """
     settings_file = Path(".claude/settings.local.json")
     
@@ -75,18 +88,21 @@ def configure_claude_agent_settings(data_source_path: str):
         "Bash(make:*)"
     ]
     
-    # Deny rules for data source protection (file tools and bash commands)
-    required_deny_rules = [
-        f"Write(./{data_source_path}/**)",
-        f"Bash(rm:*{data_source_path}*)",
-        f"Bash(mv:*{data_source_path}*)",
-        f"Bash(cp:*{data_source_path}*)",
-        f"Bash(mkdir:*{data_source_path}*)",
-        f"Bash(touch:*{data_source_path}*)",
-        f"Bash(echo:*>{data_source_path}*)",
-        f"Bash(cat:*>{data_source_path}*)",
-        f"Bash(cd:*{data_source_path}*&&*mkdir*)",
-    ]
+    # Build deny rules for all data sources
+    required_deny_rules = []
+    for data_source in data_sources:
+        data_source_path = f"{data_path}/{data_source}"
+        required_deny_rules.extend([
+            f"Write(./{data_source_path}/**)",
+            f"Bash(rm:*{data_source_path}*)",
+            f"Bash(mv:*{data_source_path}*)",
+            f"Bash(cp:*{data_source_path}*)",
+            f"Bash(mkdir:*{data_source_path}*)",
+            f"Bash(touch:*{data_source_path}*)",
+            f"Bash(echo:*>{data_source_path}*)",
+            f"Bash(cat:*>{data_source_path}*)",
+            f"Bash(cd:*{data_source_path}*&&*mkdir*)",
+        ])
     
     # Load existing settings or create default structure
     if settings_file.exists():
@@ -123,7 +139,7 @@ def configure_claude_agent_settings(data_source_path: str):
             modified = True
     
     if modified:
-        print(f"  ✓ Added data source protection for {data_source_path}")
+        print(f"  ✓ Added data source protection for: {', '.join(data_sources)}")
     
     # Write back to file only if modified
     if modified:

@@ -6,7 +6,7 @@ This example demonstrates how to create successful partitions for a knowledge gr
 
 ```
 data/
-└── data_source_repo_name/
+└── data_source_1/
     ├── folderA/
     │   ├── fileAA.md
     │   └── fileAB.md
@@ -22,22 +22,22 @@ data/
 
 ### Partition 1: Core Documentation (partition_01.json)
 Files related to primary documentation and folder A resources:
-- `data/data_source_repo_name/folderA/` (all files in folderA)
-- `data/data_source_repo_name/folderB/fileBA.md` (specific file from folderB)
-- `data/data_source_repo_name/fileA.md`
-- `data/data_source_repo_name/fileB.md`
+- `data/data_source_1/folderA/` (all files in folderA)
+- `data/data_source_1/folderB/fileBA.md` (specific file from folderB)
+- `data/data_source_1/fileA.md`
+- `data/data_source_1/fileB.md`
 
 ### Partition 2: Supporting Resources (partition_02.json)
 Files related to secondary resources:
-- `data/data_source_repo_name/folderB/fileBB.md` (specific file from folderB)
-- `data/data_source_repo_name/fileC.md`
+- `data/data_source_1/folderB/fileBB.md` (specific file from folderB)
+- `data/data_source_1/fileC.md`
 
 ## Key Points
 
-1. **Directory Notation**: Using `data/data_source_repo_name/folderA/` (with trailing slash) indicates ALL files in that directory
+1. **Directory Notation**: Using `data/data_source_1/folderA/` (with trailing slash) indicates ALL files in that directory
 2. **Specific Files**: Individual files are listed with their full path
 3. **Disjoint Coverage**: Each file appears in exactly one partition
-4. **Complete Coverage**: All files in data/data_source_repo_name/ are included in at least one partition
+4. **Complete Coverage**: All files in data/data_source_1/ are included in at least one partition
 5. **Logical Groupings**: Files are grouped by their content relationships and intended use
 
 ## How to Create Partitions
@@ -49,17 +49,17 @@ Use the `create_partition.py` script:
 python scripts/create_partition.py \
   "Core Documentation" \
   "Primary documentation files and folder A resources" \
-  "data/data_source_repo_name/folderA/" \
-  "data/data_source_repo_name/folderB/fileBA.md" \data_source_repo_name
-  "data/data_source_repo_name/fileA.md" \
-  "data/data_source_repo_name/fileB.md"
+  "data/data_source_1/folderA/" \
+  "data/data_source_1/folderB/fileBA.md" \data_source_1
+  "data/data_source_1/fileA.md" \
+  "data/data_source_1/fileB.md"
 
 # Create second partition
 python scripts/create_partition.py \
   "Supporting Resources" \
   "Secondary supporting documentation and resources" \
-  "data/data_source_repo_name/folderB/fileBB.md" \
-  "data/data_source_repo_name/fileC.md"
+  "data/data_source_1/folderB/fileBB.md" \
+  "data/data_source_1/fileC.md"
 ```
 
 ## Validation
