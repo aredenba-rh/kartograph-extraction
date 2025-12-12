@@ -9,8 +9,8 @@ Usage:
 If item_item_id is not provided, it reads from PARTITION_ITEM_ID environment variable.
 
 Example:
-    python scripts/all_subtasks_done.py 3.1
-    PARTITION_ITEM_ID=3.1 python scripts/all_subtasks_done.py
+    python scripts/all_subtasks_done.py 2.1
+    PARTITION_ITEM_ID=2.1 python scripts/all_subtasks_done.py
 
 Returns exit code 0 if all subtasks are complete, 1 otherwise.
 """
@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 
-CHECKLIST_ID = "03_create_ontologies_for_each_partition"
+CHECKLIST_ID = "02_create_ontologies_for_each_partition"
 
 
 def load_checklist() -> dict:
@@ -81,8 +81,8 @@ def main():
         print("Usage: python scripts/all_subtasks_done.py [item_item_id]")
         print("\nOr set PARTITION_ITEM_ID environment variable.")
         print("\nExample:")
-        print("  python scripts/all_subtasks_done.py 3.1")
-        print("  PARTITION_ITEM_ID=3.1 python scripts/all_subtasks_done.py")
+        print("  python scripts/all_subtasks_done.py 2.1")
+        print("  PARTITION_ITEM_ID=2.1 python scripts/all_subtasks_done.py")
         sys.exit(1)
     
     all_complete, incomplete = check_all_subtasks_done(item_item_id)

@@ -17,34 +17,33 @@ I'm building a Knowledge Graph from technical documentation repositories in the 
    find data/ -type f -name "*.md" -o -name "*.adoc" | head -20
    ```
 
-2. **Analyze Question Patterns**: Read `golden.jsonl` to understand what questions the AI assistant will need to answer
-   ```bash
-   head -20 golden.jsonl
-   cat golden.jsonl | wc -l
-   ```
-
-3. **Sample Content Analysis**: Read representative files from each data source to identify:
+2. **Sample Content Analysis**: Read representative files from each data source to identify:
    - What entities appear (components, tools, errors, procedures, etc.)
    - What relationships exist between entities
    - What abstraction level would optimize query traversal
 
-4. **Create Entity Types**: For each entity type you identify, run:
+3. **Create Required Entity Types**: For each required entity type (specified below), run:
    ```bash
-   python scripts/create_master_entity.py "<type>" "<description>" "<required_attributes>" "<optional_attributes>" "<example_names>" "<naming_convention>"
+   python scripts/create_master_entity.py "<type>" "<description>" "<example_file>" "<example_in_file>"
    ```
 
-5. **Create Relationship Types**: For each relationship type you identify, run:
+4. **Create Additional Entity Types**: Identify and create additional entity types beyond the required set
+
+5. **Create Required Relationship Types**: For each required relationship type (specified below), run:
    ```bash
-   python scripts/create_master_relationship.py "<type>" "<source_entity_type>" "<target_entity_type>" "<description>" "<properties>" "<example>"
+   python scripts/create_master_relationship.py "<type>" "<source_entity_type>" "<target_entity_type>" "<description>" "<example_file>" "<example_in_file>"
    ```
 
-6. **Validate Completeness**: Ensure your ontology can answer the questions in `golden.jsonl`:
-   - Can you answer "How do I...?" questions? (procedural)
-   - Can you answer "What causes...?" questions? (troubleshooting)
-   - Can you answer "Where is...?" questions? (location/namespace)
-   - Can you answer "What is...?" questions? (conceptual)
+6. **Create Additional Relationship Types**: Identify and create additional relationship types beyond the required set
 
-7. **Complete**: Respond without tools when all entity and relationship types are defined
+7. **Mental Validation**: Before completing, verify your ontology enables efficient answers to:
+   - Procedural questions ("How do I...?")
+   - Troubleshooting questions ("What causes...?", "How to fix...?")
+   - Location questions ("Where is...?")
+   - Conceptual questions ("What is...?")
+   - Ensure answers require ≤3 graph hops
+
+8. **Complete**: Respond without tools when all entity and relationship types are defined
 
 
 ## Your Goal
@@ -53,7 +52,7 @@ Create a **COMPLETE** master ontology that:
 - Captures ALL meaningful entity types present within and across data sources
 - Captures ALL meaningful relationship types between entities
 - Uses **mid-level abstraction** (specific enough for domain semantics, general enough for reusability)
-- Enables efficient graph traversal for question answering (1-3 hops maximum)f
+- Enables efficient graph traversal for question answering (1-3 hops maximum)
 
 
 ## Abstraction Level: Mid-Level Semantic (CRITICAL)
@@ -69,10 +68,10 @@ Your entity and relationship types must exist at the **mid-level abstraction lay
 **TOO SPECIFIC (❌ AVOID):**
 - Entity: `ROSAClassicCluster`, `ROSAHCPCluster`, `OSDCluster` (should be: `Cluster` with `deployment_model` attribute)
 - Entity: `M5XLargeInstanceType`, `M6XLargeInstanceType` (should be: `InstanceType` with `name` attribute)
-- Entity: `ROSA_4_12`, `ROSA_4_13` (should be: `Product` with version in name or attributes)
+- Entity: `ROSA_4_12`, `ROSA_4_13` (should be: `Product` with version in name like "ROSA 4.12")
 
 **CORRECT ABSTRACTION (✅ TARGET):**
-- Entity: `Component`, `Tool`, `Configuration`, `Procedure`, `Alert`, `Error`, `Cluster`, `Namespace`
+- Entity: `Component`, `Tool`, `Configuration`, `Procedure`, `Alert`, `Error`, `Cluster`, `Namespace`, `Pod`
 - Relationship: `TROUBLESHOOTS`, `REQUIRES`, `CONFIGURES`, `RESOLVES`, `CAUSES`, `LOCATED_IN`
 
 
@@ -86,7 +85,6 @@ Your entity and relationship types must exist at the **mid-level abstraction lay
 - Entity type: `Product`
 - Entity instances: `ROSA 4.12`, `ROSA 4.13`, `OpenShift 4.15`
 - Use when: Major product versions are frequently queried or have distinct features
-- Example attribute: `version_number: "4.12"` (extracted from name for filtering)
 
 **Pattern B - Version as Attribute (for version ranges/compatibility):**
 - Entity type: `Component`
@@ -95,367 +93,118 @@ Your entity and relationship types must exist at the **mid-level abstraction lay
 
 **Pattern C - Version as Attribute (for tools/utilities):**
 - Entity type: `Tool`
-- Attributes: `current_version: "1.2.5"`, `min_required_version: "1.1.11"`
+- Attributes: `current_version: "1.2.5"`
 - Use when: Tool versions change frequently, not central to queries
 
-**Rationale:** This keeps the graph lean while preserving version information where needed. Version entities would explode the graph size without adding query value.
+**Rationale:** This keeps the graph lean while preserving version information. Version entities would explode the graph size without adding query value.
 
 
-### 2. Document Type Entities (REQUIRED)
+### 2. Denormalize Decision Flags
 
-You MUST create entity types for different documentation source types. Based on typical enterprise technical documentation, define:
+Put critical decision-making attributes directly on entities, not as separate entities:
+- ✅ `Procedure.manual_intervention_when = ["Different OCM orgs", "Version ≤ 4.10"]`
+- ❌ NOT: `Procedure → HAS_CONSTRAINT → Constraint("Version ≤ 4.10")`
 
-**KCSArticle** - Knowledge-centered service articles
-- Description: Troubleshooting solutions, known issues, resolution procedures
-- Required attributes: `article_id`, `title`
-- Optional attributes: `category`, `tags`, `created_date`, `modified_date`, `url`
-- Naming convention: Use article ID or title as name (e.g., "KCS 7120659" or article title)
-
-**SOP** - Standard Operating Procedure
-- Description: Operational runbooks, alert response procedures, step-by-step guides for SRE tasks
-- Required attributes: `title`, `procedure_type`
-- Optional attributes: `alert_name` (if SOP responds to specific alert), `severity`, `target_role`
-- Naming convention: Use alert name or SOP title (e.g., "APISchemeStatusFailing SOP" or "UpgradeNodeDrainFailedSRE")
-
-**Documentation** - How-to guides, architecture docs, reference materials
-- Description: Tutorial documentation, architectural explanations, concept guides, reference materials
-- Required attributes: `title`, `doc_type`
-- Optional attributes: `product_area`, `product_version`, `audience`
-- Naming convention: Use document title
-- Doc type values: `tutorial`, `guide`, `reference`, `concept`, `architecture`
-
-**CodeSnippet** - Executable examples embedded in documents
-- Description: YAML configurations, shell commands, code examples, config file snippets
-- Required attributes: `language`, `snippet_type`
-- Optional attributes: `source_file`, `line_number`
-- Naming convention: Descriptive name based on what the snippet does
-- Snippet types: `command`, `config`, `yaml`, `script`, `example`
+This enables fast attribute-based filtering instead of expensive graph traversal.
 
 
-### 3. Operational & Technical Entities
+### 3. Self-Describing Entities
 
-Design entity types to answer "how-to" and "what-is" questions. Consider these categories:
-
-**Operational Entities:**
-- `Tool` - CLI utilities, binaries, scripts
-  - Required: `name`, `purpose`
-  - Optional: `current_version`, `installation_method`, `requires_permissions`
-
-- `Command` - Executable commands with flags/parameters
-  - Required: `tool`, `syntax`, `description`
-  - Optional: `required_flags`, `optional_flags`, `example_usage`
-
-- `Procedure` - Multi-step operational tasks
-  - Required: `name`, `description`
-  - Optional: `prerequisites`, `requires_sre`, `requires_role`, `ui_available`, `cli_available`, `estimated_duration`
-  - **IMPORTANT**: Denormalize critical decision flags like `requires_sre`, `ui_available` as attributes (don't make separate entities)
-
-- `Configuration` - Settings, CRDs, policies, config files
-  - Required: `name`, `config_type`
-  - Optional: `scope`, `applies_to_cluster_type`, `required_for`, `default_value`
-
-**Technical System Entities:**
-- `Component` - Services, operators, controllers, daemons
-  - Required: `name`, `component_type`
-  - Optional: `namespace`, `min_version`, `max_version`, `deployment_model`, `managed_by`
-
-- `Cluster` - Managed clusters, deployment environments
-  - Required: `name`, `cluster_type`
-  - Optional: `deployment_model`, `cloud_provider`, `region`, `version`
-
-- `CloudResource` - Cloud provider resources
-  - Required: `name`, `resource_type`, `provider`
-  - Optional: `region`, `cost_implications`, `quota_limits`
-  - Examples: VPC, IAM role, Security Group, S3 bucket, PrivateLink endpoint
-
-- `Namespace` - Kubernetes namespaces
-  - Required: `name`, `purpose`
-  - Optional: `cluster_type`, `contains_pod_types`, `managed_by`
-
-- `Pod` - Container pods and pod types
-  - Required: `name`, `pod_type`
-  - Optional: `namespace`, `component`, `replica_count`
-
-**Problem/Solution Entities:**
-- `Alert` - Monitoring alerts and warnings
-  - Required: `name`, `severity`, `description`
-  - Optional: `prometheus_query`, `firing_duration`, `alert_namespace`, `affects_cluster_type`
-
-- `Error` - Error codes, failure modes, error messages
-  - Required: `name`, `error_code`, `description`
-  - Optional: `error_message_pattern`, `severity`, `affected_components`, `common_causes`
-
-- `KnownIssue` - Documented bugs, limitations, active issues
-  - Required: `name`, `issue_id`, `status`, `description`
-  - Optional: `affects_feature`, `workaround_available`, `severity`, `affects_versions`, `fixed_in_version`
-
-- `Symptom` - Observable problems users report
-  - Required: `name`, `symptom_type`, `description`
-  - Optional: `user_observable`, `keywords`, `affects_feature`, `affects_cluster_type`, `common_contexts`
-  - **IMPORTANT**: Include enough context in attributes to understand WHERE symptom occurs (what product, what process, what cluster type)
-
-**Conceptual Entities:**
-- `Concept` - Architectural patterns, technical terms, design concepts
-  - Required: `name`, `description`
-  - Optional: `category`, `related_products`, `also_known_as`
-
-- `Feature` - Product capabilities, add-ons, optional functionality
-  - Required: `name`, `description`
-  - Optional: `introduced_in_version`, `deprecated_in_version`, `requires_configuration`, `enabled_by_default`
-
-- `Permission` - RBAC roles, IAM policies, access controls
-  - Required: `name`, `scope`
-  - Optional: `required_for`, `grants_access_to`, `assigned_via`
+Entities should include enough context in their attributes to understand their role without traversal:
+- `Symptom` should include: `affects_feature`, `affects_product`, `common_contexts`
+- `Error` should include: `error_code`, `affected_components`, `severity`
+- `Alert` should include: `severity`, `affects_cluster_type`, `alert_namespace`
 
 
-### 4. Relationship Types (Semantic & Query-Optimized)
+## User-Enforced Entity and Relationship Types
 
-Design relationships that capture **WHY** entities are connected. The AI will traverse these to answer questions.
+**Required Entity Types** (you MUST create these):
 
-**Documentation Relationships:**
-- `DOCUMENTS` - Document describes/explains an entity
-  - Example: `Documentation("Creating HCP cluster") → DOCUMENTS → Procedure("Create HCP cluster")`
+- **KCSArticle**: Troubleshooting solutions, known issues, resolution procedures documented in knowledge-centered service articles
+- **SOP**: Standard operating procedures, operational runbooks, alert response guides for SRE tasks
+- **Documentation**: How-to guides, architecture documentation, tutorials, concept explanations, and reference materials
 
-- `REFERENCES` - Cross-reference between documents
-  - Example: `KCSArticle("OAuth timeout") → REFERENCES → Documentation("Private cluster creation")`
+**Required Relationship Types** (you MUST create these):
 
-- `CONTAINS_EXAMPLE` - Document contains code snippet/command example
-  - Example: `SOP("Transfer ownership") → CONTAINS_EXAMPLE → CodeSnippet("osdctl cluster transfer-owner")`
-
-**Troubleshooting Relationships:**
-- `TROUBLESHOOTS` - Document provides troubleshooting for problem
-  - Example: `KCSArticle(7120659) → TROUBLESHOOTS → Symptom("OAuth connection timeout")`
-  - Example: `SOP("APISchemeStatusFailing") → TROUBLESHOOTS → Alert("APISchemeStatusFailing")`
-
-- `RESOLVES` - Procedure/configuration resolves error/issue
-  - Example: `Procedure("Add security group") → RESOLVES → Error("OAuth timeout")`
-
-- `CAUSES` - Entity causes error/problem (failure mode)
-  - Example: `Configuration("Default PrivateLink security group") → CAUSES → Error("OAuth connection blocked")`
-
-- `SYMPTOM_OF` - Observable symptom indicates underlying issue
-  - Example: `Symptom("Button disabled") → SYMPTOM_OF → KnownIssue("XCMSTRAT-293 UI bug")`
-
-- `WORKAROUND_IS` - Workaround for issue
-  - Example: `KnownIssue("UI disabled") → WORKAROUND_IS → Command("osdctl cluster transfer-owner")`
-
-**Operational Relationships:**
-- `EXECUTES` - Procedure executes command/tool
-  - Example: `Procedure("Transfer ownership") → EXECUTES → Command("osdctl cluster transfer-owner")`
-
-- `REQUIRES` - Entity requires prerequisite
-  - Example: `Procedure("Transfer ownership") → REQUIRES → Permission("Region Lead")`
-  - Example: `Component("AWS EFS CSI Driver") → REQUIRES → CloudResource("IAM role")`
-
-- `CONFIGURES` - Procedure/command configures entity
-  - Example: `Command("rosa create cluster") → CONFIGURES → Cluster(HCP)`
-
-- `USES` - Entity uses another entity
-  - Example: `Component("OAuth service") → USES → CloudResource("PrivateLink endpoint")`
-  - Example: `Command("osdctl cluster transfer-owner") → USES → Tool("osdctl")`
-
-- `LOCATED_IN` - Pod/component located in namespace/cluster
-  - Example: `Pod("etcd") → LOCATED_IN → Namespace("openshift-etcd")`
-  - Example: `Component("Control plane pods") → LOCATED_IN → Cluster("Management cluster")`
-
-**Architectural Relationships:**
-- `PART_OF` - Component is part of larger system
-  - Example: `Component("etcd") → PART_OF → Component("Control plane")`
-
-- `DEPENDS_ON` - Component depends on another
-  - Example: `Component("OAuth service") → DEPENDS_ON → Component("PrivateLink")`
-
-- `IMPLEMENTS` - Component implements feature
-  - Example: `Component("cloud-ingress-operator") → IMPLEMENTS → Feature("API scheme management")`
-
-- `MANAGES` - Component/operator manages resource
-  - Example: `Component("Machine API operator") → MANAGES → CloudResource("EC2 instances")`
-
-**Version/Compatibility Relationships:**
-- `APPLIES_TO` - Configuration/procedure applies to specific product/version/cluster-type
-  - Example: `Procedure("Create HCP account roles") → APPLIES_TO → Product("ROSA HCP")`
-  - Example: `Configuration("Zero Egress") → APPLIES_TO → Cluster(type="HCP")`
-
-- `COMPATIBLE_WITH` - Tool/component compatible with product/version
-  - Example: `Tool("rosa-cli 1.2.5") → COMPATIBLE_WITH → Product("ROSA 4.12")`
-
-- `INTRODUCED_IN` - Feature introduced in product version
-  - Example: `Feature("Hosted Control Planes") → INTRODUCED_IN → Product("ROSA 4.10")`
-  - Use product name WITH version (e.g., "ROSA 4.10")
-
-- `FIXED_IN` - Error fixed in product version
-  - Example: `Error("etcd CrashLoopBackOff") → FIXED_IN → Product("ROSA 4.13")`
-  - Use product name WITH version
-
-**Procedural Relationships:**
-- `HAS_PREREQUISITE` - Task/procedure has prerequisite
-  - Example: `Procedure("Upgrade control plane") → HAS_PREREQUISITE → Procedure("Upgrade account roles")`
-
-- `FOLLOWS` - Procedural step ordering
-  - Example: `Procedure("Upgrade machine pools") → FOLLOWS → Procedure("Upgrade control plane")`
-
-- `ALTERNATIVE_TO` - Alternative methods/approaches
-  - Example: `Command("ocm get cluster") → ALTERNATIVE_TO → Command("rosa describe cluster")`
-
-**Constraint Relationships (Use Sparingly - Prefer Denormalized Attributes):**
-- **AVOID** creating separate Constraint entities. Instead, denormalize constraints as attributes:
-  - ✅ `Procedure.requires_sre = true`
-  - ✅ `Procedure.ui_available = false`
-  - ✅ `Procedure.requires_role = "Region Lead"`
-  - ✅ `Procedure.manual_intervention_when = ["Different OCM orgs", "Version ≤ 4.10", "HCP clusters"]`
-  - ❌ NOT: `Procedure → HAS_CONSTRAINT → Constraint("Requires Region Lead")`
-
-- Only use constraint relationships if the constraint itself is reusable and queryable:
-  - Example: `Procedure("Resize control plane") → REQUIRES_CONDITION → Condition("High cluster utilization")`
+- **TROUBLESHOOTS**: Links a document (KCSArticle, SOP) to the problem it helps solve (Error, Alert, Symptom)
+- **DOCUMENTS**: Links a Documentation entity to the entity it describes or explains
+- **CONTAINS_EXAMPLE**: Links a document to executable code snippets, commands, or configuration examples it contains
 
 
-## Entity Ontology Format
+## Examples of Mid-Level Abstraction (Extrapolate to Your Data)
 
-```json
-{
-  "entities": [
-    {
-      "entity_id": "1",
-      "type": "Procedure",
-      "description": "Multi-step operational tasks or workflows that SREs or customers execute to perform actions on clusters, troubleshoot issues, or configure systems",
-      "required_attributes": [
-        "name",
-        "description"
-      ],
-      "optional_attributes": [
-        "prerequisites",
-        "requires_sre",
-        "requires_role",
-        "ui_available",
-        "cli_available",
-        "estimated_duration",
-        "manual_intervention_when"
-      ],
-      "example_names": [
-        "Transfer Cluster Ownership",
-        "Upgrade HCP Control Plane",
-        "Resize Control Plane Nodes"
-      ],
-      "naming_convention": "Use imperative verb phrase describing the procedure's goal (e.g., 'Transfer Cluster Ownership', not 'Transferring Ownership'). Be specific enough to distinguish from similar procedures."
-    },
-    {
-      "entity_id": "2",
-      "type": "KCSArticle",
-      "description": "Knowledge-centered service solution articles that document troubleshooting steps, known issues, resolutions, and best practices for problems users encounter",
-      "required_attributes": [
-        "article_id",
-        "title"
-      ],
-      "optional_attributes": [
-        "category",
-        "tags",
-        "created_date",
-        "modified_date",
-        "url",
-        "author"
-      ],
-      "example_names": [
-        "KCS 7120659",
-        "Unable to access OAuth page after ROSA HCP installation",
-        "Solutions 6126691"
-      ],
-      "naming_convention": "Prefer 'KCS {article_id}' format for uniqueness, or use full article title if article ID not prominent. Include both in attributes."
-    }
-  ]
-}
-```
+The following are **examples** of the abstraction level that works well. Study these patterns and extrapolate them to the content in your data sources.
 
-**Key Fields:**
-- `entity_id`: Sequential numeric ID (string format)
-- `type`: The entity type name (mid-level abstraction)
-- `description`: 1-3 sentences explaining what this entity type represents and its purpose in the knowledge graph
-- `required_attributes`: Array of attribute names that MUST be present on every instance
-- `optional_attributes`: Array of attribute names that MAY be present depending on the instance
-- `example_names`: 3-5 example entity names showing how instances would be named
-- `naming_convention`: Detailed guidance on how to name instances of this entity type (critical for consistency)
+### Example Operational Entities:
+- `Tool` - CLI utilities, binaries, scripts (e.g., "osdctl", "rosa", "kubectl")
+- `Command` - Executable commands (e.g., "osdctl cluster transfer-owner")
+- `Procedure` - Multi-step operational tasks (e.g., "Transfer Cluster Ownership", "Resize Control Plane")
+- `Configuration` - Settings, CRDs, policies (e.g., "Security Group Configuration", "PDB policy")
 
+### Example Technical System Entities:
+- `Component` - Services, operators, controllers (e.g., "etcd", "OAuth service", "cloud-ingress-operator")
+- `Cluster` - Managed environments (e.g., "HCP Cluster", "Management Cluster")
+- `CloudResource` - Cloud provider resources (e.g., "VPC", "IAM Role", "PrivateLink endpoint")
+- `Namespace` - Kubernetes namespaces (e.g., "openshift-etcd", "openshift-monitoring")
 
-## Relationship Ontology Format
+### Example Problem/Solution Entities:
+- `Alert` - Monitoring alerts (e.g., "UpgradeNodeDrainFailedSRE", "APISchemeStatusFailing")
+- `Error` - Error codes and failures (e.g., "OAuth timeout error", "XCMSTRAT-293")
+- `KnownIssue` - Documented bugs (e.g., "UI button disabled bug")
+- `Symptom` - Observable problems (e.g., "Button disabled in UI", "Connection timeout")
 
-```json
-{
-  "relationships": [
-    {
-      "relationship_id": "1",
-      "type": "TROUBLESHOOTS",
-      "source_entity_type": "KCSArticle",
-      "target_entity_type": "Symptom",
-      "description": "Indicates that a KCSArticle provides troubleshooting guidance, diagnostic steps, root cause analysis, or resolution procedures for a specific Symptom, Error, or Alert that users encounter",
-      "properties": [
-        "resolution_type",
-        "confidence"
-      ],
-      "example": "KCSArticle('KCS 7120659') → TROUBLESHOOTS → Symptom('OAuth page connection timeout') with resolution_type='security_group_configuration'"
-    },
-    {
-      "relationship_id": "2",
-      "type": "REQUIRES",
-      "source_entity_type": "Procedure",
-      "target_entity_type": "Permission",
-      "description": "Indicates that a Procedure requires a specific Permission, role, or access level to be executed. This helps determine who can perform the procedure and what access needs to be granted.",
-      "properties": [
-        "required_for_step",
-        "can_be_delegated"
-      ],
-      "example": "Procedure('Transfer Cluster Ownership') → REQUIRES → Permission('Region Lead') with can_be_delegated=false"
-    }
-  ]
-}
-```
-
-**Key Fields:**
-- `relationship_id`: Sequential numeric ID (string format)
-- `type`: The relationship type name (semantic, query-oriented)
-- `source_entity_type`: The entity type this relationship originates from
-- `target_entity_type`: The entity type this relationship points to
-- `description`: 1-3 sentences explaining what this relationship means and when it should be used
-- `properties`: Optional array of property names that can be attached to relationship instances for additional context
-- `example`: Concrete example showing: `SourceEntity('name') → TYPE → TargetEntity('name') [with properties]`
+### Example Relationship Patterns:
+- `TROUBLESHOOTS` - Document provides solution for problem (e.g., `KCSArticle → TROUBLESHOOTS → Error`)
+- `RESOLVES` - Action resolves problem (e.g., `Procedure → RESOLVES → Error`)
+- `REQUIRES` - Entity needs prerequisite (e.g., `Procedure → REQUIRES → Permission`)
+- `LOCATED_IN` - Physical/logical location (e.g., `Pod → LOCATED_IN → Namespace`)
+- `CAUSES` - Failure mode (e.g., `Configuration → CAUSES → Error`)
+- `EXECUTES` - Action uses tool (e.g., `Procedure → EXECUTES → Command`)
+- `DOCUMENTS` - Documentation describes entity (e.g., `Documentation → DOCUMENTS → Feature`)
 
 
 ## Available Commands
 
+You have access to these commands:
+  - `python scripts/create_master_entity.py`
+  - `python scripts/create_master_relationship.py`
+
+
+## Command Usage
+
+### Create Entity Type:
 ```bash
-# Create an entity type in master ontology
 python scripts/create_master_entity.py \
   "<type>" \
   "<description>" \
-  "<required_attributes>" \
-  "<optional_attributes>" \
-  "<example_names>" \
-  "<naming_convention>"
+  "<example_file>" \
+  "<example_in_file>"
+```
 
-# Create a relationship type in master ontology
+**Arguments:**
+- `<type>`: Entity type name (e.g., "Procedure", "Component", "Alert")
+- `<description>`: 1-3 sentences explaining what this entity type represents
+- `<example_file>`: Path to a file where this entity appears (relative to repo root)
+- `<example_in_file>`: Concrete example from the file (e.g., "Transfer Cluster Ownership")
+
+### Create Relationship Type:
+```bash
 python scripts/create_master_relationship.py \
   "<type>" \
   "<source_entity_type>" \
   "<target_entity_type>" \
   "<description>" \
-  "<properties>" \
-  "<example>"
-
-# View current master entity ontology
-cat ontologies/master_entity_ontology.json
-
-# View current master relationship ontology
-cat ontologies/master_relationship_ontology.json
-
-# Count entity/relationship types
-cat ontologies/master_entity_ontology.json | jq '.entities | length'
-cat ontologies/master_relationship_ontology.json | jq '.relationships | length'
+  "<example_file>" \
+  "<example_in_file>"
 ```
 
-**Argument Format Notes:**
-- For list arguments (`required_attributes`, `optional_attributes`, `properties`, `example_names`):
-  - Pass as comma-separated string: `"name,description,severity"`
-  - Or pass as JSON array string: `'["name","description","severity"]'`
-- For description and naming_convention: Use quotes and escape properly
-- For example: Show concrete instance with realistic names
+**Arguments:**
+- `<type>`: Relationship type name (e.g., "TROUBLESHOOTS", "REQUIRES")
+- `<source_entity_type>`: Entity type this relationship originates from
+- `<target_entity_type>`: Entity type this relationship points to
+- `<description>`: 1-3 sentences explaining when to use this relationship
+- `<example_file>`: Path to a file where this relationship appears
+- `<example_in_file>`: Concrete example (e.g., "KCS 7120659 -> TROUBLESHOOTS -> OAuth timeout")
 
 
 ## Target Metrics
@@ -463,61 +212,28 @@ cat ontologies/master_relationship_ontology.json | jq '.relationships | length'
 Aim for these ranges (quality over quantity):
 
 **Entity Types:** 15-25 types
-- Document types: 3-4 (KCSArticle, SOP, Documentation, CodeSnippet)
-- Operational: 4-5 (Tool, Command, Procedure, Configuration)
-- Technical: 5-7 (Component, Cluster, CloudResource, Namespace, Pod, etc.)
-- Problem/Solution: 4-6 (Alert, Error, KnownIssue, Symptom, etc.)
-- Conceptual: 2-3 (Concept, Feature, Permission)
+- Document types: 3-4
+- Operational: 4-5
+- Technical: 5-7
+- Problem/Solution: 4-6
+- Conceptual: 2-3
 
 **Relationship Types:** 20-35 types
 - Documentation: 3-4
 - Troubleshooting: 5-7
 - Operational: 5-7
 - Architectural: 4-6
-- Version/Compatibility: 3-5
 - Procedural: 3-4
-
-
-## Validation Questions
-
-Before completing, verify your ontology can efficiently answer these query patterns:
-
-1. **Procedural ("How do I...?")**:
-   - Query path: `Documentation/SOP → DOCUMENTS → Procedure → EXECUTES → Command → USES → Tool`
-   - Can answer: "How do I transfer cluster ownership?"
-   - Max hops: 3-4
-
-2. **Troubleshooting ("What causes...?")**:
-   - Query path: `Error/Symptom ← SYMPTOM_OF ← KnownIssue ← CAUSED_BY ← Component/Configuration`
-   - Can answer: "What causes OAuth timeout errors?"
-   - Max hops: 2-3
-
-3. **Location ("Where is...?")**:
-   - Query path: `Component/Pod → LOCATED_IN → Namespace/Cluster`
-   - Can answer: "Where are etcd pods located?"
-   - Max hops: 1-2
-
-4. **Resolution ("How to fix...?")**:
-   - Query path: `Error ← TROUBLESHOOTS ← KCSArticle → CONTAINS_EXAMPLE → CodeSnippet`
-   - Can answer: "How do I fix cluster installation failures?"
-   - Max hops: 2-3
-
-5. **Conceptual ("What is...?")**:
-   - Query path: `Concept/Feature ← DOCUMENTS ← Documentation ← IMPLEMENTS ← Component`
-   - Can answer: "What is hosted control plane architecture?"
-   - Max hops: 2-3
-
-If your ontology enables these traversal patterns in ≤3 hops, you've achieved the right abstraction level.
 
 
 ## Critical Reminders
 
-1. **DO NOT create Version as entity type** - Use attributes or version-in-name pattern
-2. **DENORMALIZE decision flags** - Put `requires_sre`, `ui_available` as attributes, not separate entities
-3. **Make Symptoms self-describing** - Include context attributes: `affects_feature`, `affects_cluster_type`, `common_contexts`
-4. **Use mid-level abstraction** - Not "Thing", not "M5XLargeInstanceType", but "InstanceType"
-5. **Design for traversal** - Relationships should enable 1-3 hop queries for common questions
-6. **Work across data sources** - Entity types should be reusable, not tied to one repository
-7. **Focus on TYPES not instances** - You're defining the schema, not populating the graph
+1. **NO Version entity type** - Use attributes or version-in-name pattern
+2. **Denormalize decision flags** - Put critical attributes on entities, not separate nodes
+3. **Make entities self-describing** - Include context attributes to minimize traversal
+4. **Mid-level abstraction** - Not "Thing", not "M5XLargeInstanceType", but "InstanceType"
+5. **Design for traversal** - Enable 1-3 hop queries for common question patterns
+6. **Generic, reusable types** - Should work across data sources, not tied to one repository
+7. **TYPES not instances** - Define the schema, don't populate the graph
 
-Begin by surveying the data sources and analyzing the question patterns in `golden.jsonl`.
+Begin by surveying the data sources and sampling representative files to understand the content.

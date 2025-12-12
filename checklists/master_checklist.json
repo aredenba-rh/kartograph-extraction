@@ -10,10 +10,10 @@
       "sub_checklist": "01_create_file_partitions.json"
     },
     {
-      "item_id": "step_03",
+      "item_id": "step_02",
       "description": "Create ontologies for each partition",
       "completed": false,
-      "sub_checklist": "03_create_ontologies_for_each_partition.json"
+      "sub_checklist": "02_create_ontologies_for_each_partition.json"
     }
   ]
 }
