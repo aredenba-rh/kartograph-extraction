@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """
-Create Partition Script
-Creates a new partition JSON file with auto-incrementing ID.
+Create File Subset Script
+Creates a new file subset JSON file with auto-incrementing ID.
 Called by Claude Code Agent SDK during partition creation workflow.
+
+Usage:
+    python scripts/create_file_subset.py "<data_source>" "<title>" "<description>" <path1> [path2] ...
+    
+    Example:
+        python scripts/create_file_subset.py "openshift-docs" "AWS Integration" "Files related to AWS" folder1/ file.md
 """
 
 import json
@@ -11,12 +17,17 @@ from pathlib import Path
 from typing import List
 
 
-def get_next_partition_id() -> int:
+def get_next_partition_id(data_source: str) -> int:
     """
-    Get the next available partition ID by checking existing partitions.
-    Returns the next integer ID.
+    Get the next available partition ID by checking existing file subsets for a data source.
+    
+    Args:
+        data_source: Name of the data source (e.g., "openshift-docs")
+        
+    Returns:
+        The next integer ID.
     """
-    partitions_dir = Path("partitions")
+    partitions_dir = Path("partitions") / data_source
     
     if not partitions_dir.exists():
         partitions_dir.mkdir(parents=True, exist_ok=True)
@@ -24,7 +35,7 @@ def get_next_partition_id() -> int:
     
     # Find highest existing partition ID
     max_id = 0
-    for file_path in partitions_dir.glob("partition_*.json"):
+    for file_path in partitions_dir.glob("file_subset_*.json"):
         try:
             with open(file_path, 'r') as f:
                 data = json.load(f)
@@ -37,11 +48,12 @@ def get_next_partition_id() -> int:
     return max_id + 1
 
 
-def create_partition(title: str, description: str, paths: List[str]) -> dict:
+def create_partition(data_source: str, title: str, description: str, paths: List[str]) -> dict:
     """
-    Create a new partition JSON file.
+    Create a new file subset JSON file for a specific data source.
     
     Args:
+        data_source: Name of the data source (e.g., "openshift-docs")
         title: One sentence summary of the partition
         description: Detailed description of how files in this partition relate
         paths: List of relative file paths from the data source root
@@ -52,11 +64,14 @@ def create_partition(title: str, description: str, paths: List[str]) -> dict:
     Note:
         - Paths should be RELATIVE to the data source (e.g., "kcs_solutions/file.md" 
           not "data/rosa-kcs/kcs_solutions/file.md")
-        - The data source path (e.g., "data/rosa-kcs/") is configured in extraction_config.json
+        - The data source folder is determined by the first argument
         - Paths ending with "/" (e.g., "kcs_solutions/") indicate all files within that directory.
         - entity_ontology and relationship_ontology are initialized as empty arrays.
     """
     # Input validation
+    if not data_source or not isinstance(data_source, str):
+        raise ValueError("Data source must be a non-empty string")
+    
     if not title or not isinstance(title, str):
         raise ValueError("Title must be a non-empty string")
     
@@ -66,8 +81,8 @@ def create_partition(title: str, description: str, paths: List[str]) -> dict:
     if not paths or not isinstance(paths, list) or len(paths) == 0:
         raise ValueError("Paths must be a non-empty list")
     
-    # Get next partition ID
-    partition_id = get_next_partition_id()
+    # Get next partition ID for this data source
+    partition_id = get_next_partition_id(data_source)
     
     # Create partition data structure
     partition_data = {
@@ -79,16 +94,16 @@ def create_partition(title: str, description: str, paths: List[str]) -> dict:
         "relationship_ontology": []
     }
     
-    # Create filename
-    partitions_dir = Path("partitions")
+    # Create filename in data source subfolder
+    partitions_dir = Path("partitions") / data_source
     partitions_dir.mkdir(parents=True, exist_ok=True)
-    filename = partitions_dir / f"partition_{partition_id:02d}.json"
+    filename = partitions_dir / f"file_subset_{partition_id:02d}.json"
     
     # Write partition file
     with open(filename, 'w') as f:
         json.dump(partition_data, f, indent=2)
     
-    print(f"✅ Created partition {partition_id}: {filename}")
+    print(f"✅ Created file subset {partition_id}: {filename}")
     print(f"   Title: {title}")
     print(f"   Files/paths: {len(paths)}")
     
@@ -96,23 +111,25 @@ def create_partition(title: str, description: str, paths: List[str]) -> dict:
 
 
 def main():
-    """Command-line interface for create_partition."""
-    if len(sys.argv) < 4:
-        print("Usage: create_partition.py <title> <description> <path1> [path2] [path3] ...")
+    """Command-line interface for create_file_subset."""
+    if len(sys.argv) < 5:
+        print('Usage: python scripts/create_file_subset.py "<data_source>" "<title>" "<description>" <path1> [path2] ...')
         print("\nExample:")
-        print('  create_partition.py "AWS Integration" "Files related to AWS service integration" "kcs_solutions/" "config/settings.yaml"')
+        print('  python scripts/create_file_subset.py "openshift-docs" "AWS Integration" "Files related to AWS" aws_folder/ config/settings.yaml')
         print("\nNote:")
-        print("  - Paths should be RELATIVE to the data source (configured in extraction_config.json)")
+        print("  - Paths should be RELATIVE to the data source (e.g., 'folder/' not 'data/source/folder/')")
         print("  - Use trailing slash for directory paths (e.g., 'folder/') to include all files in that directory")
+        print("  - Files are created in partitions/<data_source>/file_subset_XX.json")
         sys.exit(1)
     
-    title = sys.argv[1]
-    description = sys.argv[2]
-    paths = sys.argv[3:]
+    data_source = sys.argv[1]
+    title = sys.argv[2]
+    description = sys.argv[3]
+    paths = sys.argv[4:]
     
     try:
-        partition_data = create_partition(title, description, paths)
-        print(f"\n📋 Partition created successfully!")
+        partition_data = create_partition(data_source, title, description, paths)
+        print(f"\n📋 File subset created successfully!")
         print(json.dumps(partition_data, indent=2))
         sys.exit(0)
     except Exception as e:
@@ -122,4 +139,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

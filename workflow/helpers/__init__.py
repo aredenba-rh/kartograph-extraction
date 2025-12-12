@@ -14,6 +14,7 @@ from .logging import (
     log_message,
     finalize_attempt_log,
     print_usage_summary,
+    STEP_1_LOG_DIR,
 )
 from .config import (
     load_config,
@@ -41,6 +42,7 @@ __all__ = [
     "log_message",
     "finalize_attempt_log",
     "print_usage_summary",
+    "STEP_1_LOG_DIR",
     # config
     "load_config",
     "get_data_source_path",

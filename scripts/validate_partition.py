@@ -1,59 +1,44 @@
 #!/usr/bin/env python3
 """
-Validates that partition files correctly cover the data/ folder.
+Validates that partition files correctly cover a specific data source.
+
+Usage:
+    python scripts/validate_partition.py <data_source>
+    
+    Example:
+        python scripts/validate_partition.py openshift-docs
 
 Checks:
-1. All partitions are valid JSON matching the schema
-2. All files in data/ are included in exactly one partition (disjoint coverage)
+1. All partitions in partitions/{data_source}/ are valid JSON matching the schema
+2. All files in data/{data_source}/ are included in exactly one partition (disjoint coverage)
 3. No file appears in multiple partitions
 4. No non-existent files are referenced
 
 Note: Partition files use relative paths (e.g., "kcs_solutions/file.md") which are
-resolved against the auto-detected data source path (e.g., "data/rosa-kcs/").
+resolved against the data source path (e.g., "data/openshift-docs/").
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import List, Dict, Set, Tuple
 
 
-def get_data_source_path() -> str:
+def load_partition_files(data_source: str) -> List[Dict]:
     """
-    Get the data source path by auto-detecting the single subdirectory in data/.
+    Load all partition JSON files for a specific data source.
     
+    Args:
+        data_source: Name of the data source (e.g., "openshift-docs")
+        
     Returns:
-        Full path to the data source (e.g., "data/rosa-kcs")
+        List of partition dictionaries with file path and data
     """
-    data_dir = Path("data")
-    
-    if not data_dir.exists():
-        print("❌ data/ directory does not exist")
-        sys.exit(1)
-    
-    # Get all subdirectories in data/
-    subdirs = [d for d in data_dir.iterdir() if d.is_dir()]
-    
-    if len(subdirs) == 0:
-        print("❌ No subdirectories found in data/")
-        sys.exit(1)
-    
-    if len(subdirs) > 1:
-        print(f"❌ Multiple data sources found in data/: {[d.name for d in subdirs]}")
-        print("   Expected only one data source directory")
-        sys.exit(1)
-    
-    return str(subdirs[0])
-
-
-def load_partition_files(partitions_dir: str = "partitions") -> List[Dict]:
-    """Load all partition JSON files."""
     partition_files = []
-    partitions_path = Path(partitions_dir)
+    partitions_path = Path("partitions") / data_source
 
     if not partitions_path.exists():
-        print(f"❌ Partitions directory '{partitions_dir}' does not exist")
+        print(f"❌ Partitions directory '{partitions_path}' does not exist")
         return []
 
     for file_path in sorted(partitions_path.glob("*.json")):
@@ -71,21 +56,21 @@ def load_partition_files(partitions_dir: str = "partitions") -> List[Dict]:
     return partition_files
 
 
-def get_all_data_files(data_source_path: str) -> Set[str]:
+def get_all_data_files(data_source: str) -> Set[str]:
     """
     Get all files in the data source directory (excluding .git).
     
     Args:
-        data_source_path: Full path to data source (e.g., 'data/rosa-kcs')
+        data_source: Name of the data source (e.g., "openshift-docs")
     
     Returns:
         Set of relative paths from the data source root
     """
     data_files = set()
-    data_path = Path(data_source_path)
+    data_path = Path("data") / data_source
 
     if not data_path.exists():
-        print(f"❌ Data source directory '{data_source_path}' does not exist")
+        print(f"❌ Data source directory 'data/{data_source}' does not exist")
         return data_files
 
     for file_path in data_path.rglob("*"):
@@ -98,7 +83,7 @@ def get_all_data_files(data_source_path: str) -> Set[str]:
     return data_files
 
 
-def expand_partition_paths(partition_paths: List[str], data_source_path: str) -> Set[str]:
+def expand_partition_paths(partition_paths: List[str], data_source: str) -> Set[str]:
     """
     Expand partition paths to include all actual files.
     
@@ -107,13 +92,13 @@ def expand_partition_paths(partition_paths: List[str], data_source_path: str) ->
     
     Args:
         partition_paths: List of relative paths from partition JSON (may include directory refs)
-        data_source_path: Full path to data source (e.g., 'data/rosa-kcs')
+        data_source: Name of the data source (e.g., "openshift-docs")
         
     Returns:
         Set of relative file paths (from data source root)
     """
     expanded_files = set()
-    data_source_base = Path(data_source_path)
+    data_source_base = Path("data") / data_source
     
     for path in partition_paths:
         # Check if path ends with '/' (directory reference)
@@ -136,14 +121,14 @@ def expand_partition_paths(partition_paths: List[str], data_source_path: str) ->
     return expanded_files
 
 
-def validate_partitions(partitions: List[Dict], data_files: Set[str], data_source_path: str) -> Tuple[bool, Dict]:
+def validate_partitions(partitions: List[Dict], data_files: Set[str], data_source: str) -> Tuple[bool, Dict]:
     """
     Validate that partitions form a complete, disjoint cover of data files.
 
     Args:
         partitions: List of partition dictionaries
         data_files: Set of relative file paths from data source
-        data_source_path: Full path to data source (e.g., 'data/rosa-kcs')
+        data_source: Name of the data source (e.g., "openshift-docs")
 
     Returns:
         Tuple of (is_valid, results_dict)
@@ -179,7 +164,7 @@ def validate_partitions(partitions: List[Dict], data_files: Set[str], data_sourc
         paths = partition["paths"]
 
         # Expand directory references to actual files
-        expanded_files = expand_partition_paths(paths, data_source_path)
+        expanded_files = expand_partition_paths(paths, data_source)
         
         # Check each expanded file
         for file_path in expanded_files:
@@ -221,7 +206,7 @@ def get_validation_error_message(results: Dict) -> str:
     Generate a detailed error message for Claude SDK to fix partitioning issues.
     
     Note: File paths in partitions are relative (e.g., "kcs_solutions/file.md")
-    and are resolved against the data source path from extraction_config.json.
+    and are resolved against the data source path.
     
     Returns:
         A formatted error message string
@@ -258,13 +243,14 @@ def get_validation_error_message(results: Dict) -> str:
     return "\n".join(error_parts)
 
 
-def print_results(is_valid: bool, results: Dict, data_source_path: str):
+def print_results(is_valid: bool, results: Dict, data_source: str):
     """Print validation results in a human-readable format."""
     print("\n" + "="*60)
     print("PARTITION VALIDATION RESULTS")
     print("="*60)
 
-    print(f"\nData source: {data_source_path}")
+    print(f"\nData source: {data_source}")
+    print(f"Partitions directory: partitions/{data_source}/")
     print(f"Total partitions: {results['total_partitions']}")
     print(f"Total files in data source: {results['total_data_files']}")
     print(f"Files covered by partitions: {len(results['files_in_partitions'])}")
@@ -279,7 +265,7 @@ def print_results(is_valid: bool, results: Dict, data_source_path: str):
         print("  (Files appearing in multiple partitions)")
         for file_path, partition_ids in results["duplicate_files"].items():
             print(f"  - {file_path}")
-            print(f"    Appears in: {', '.join(partition_ids)}")
+            print(f"    Appears in: {', '.join(str(p) for p in partition_ids)}")
 
     if results["missing_files"]:
         print(f"\n❌ MISSING FILES ({len(results['missing_files'])}):")
@@ -305,54 +291,58 @@ def print_results(is_valid: bool, results: Dict, data_source_path: str):
 
 def main():
     """Main validation function."""
-    # Get data source path from config
-    data_source_path = get_data_source_path()
+    if len(sys.argv) < 2:
+        print("Usage: python scripts/validate_partition.py <data_source>")
+        print("Example: python scripts/validate_partition.py openshift-docs")
+        sys.exit(1)
     
-    # Load partition files
-    partitions = load_partition_files()
+    data_source = sys.argv[1]
+    
+    # Load partition files for this data source
+    partitions = load_partition_files(data_source)
     if not partitions:
-        print("⚠️  No partition files found or error loading them")
+        print(f"⚠️  No partition files found in partitions/{data_source}/ or error loading them")
         return 1
 
-    # Get all data files
-    data_files = get_all_data_files(data_source_path)
+    # Get all data files for this data source
+    data_files = get_all_data_files(data_source)
     if not data_files:
-        print("⚠️  No data files found")
+        print(f"⚠️  No data files found in data/{data_source}/")
         return 1
 
     # Validate
-    is_valid, results = validate_partitions(partitions, data_files, data_source_path)
+    is_valid, results = validate_partitions(partitions, data_files, data_source)
 
     # Print results
-    print_results(is_valid, results, data_source_path)
+    print_results(is_valid, results, data_source)
     
     # Return structured error message for Claude SDK integration
     # Exit code 0 = valid, 1 = invalid
     return 0 if is_valid else 1
 
 
-def validate_and_get_errors() -> tuple[bool, str]:
+def validate_and_get_errors(data_source: str) -> tuple[bool, str]:
     """
     Validation function for use by other scripts (e.g., Claude SDK workflow).
+    
+    Args:
+        data_source: Name of the data source to validate (e.g., "openshift-docs")
     
     Returns:
         Tuple of (is_valid, error_message_string)
     """
-    # Get data source path from config
-    data_source_path = get_data_source_path()
-    
-    # Load partition files
-    partitions = load_partition_files()
+    # Load partition files for this data source
+    partitions = load_partition_files(data_source)
     if not partitions:
-        return False, "No partition files found or error loading them"
+        return False, f"No partition files found in partitions/{data_source}/ or error loading them"
 
-    # Get all data files
-    data_files = get_all_data_files(data_source_path)
+    # Get all data files for this data source
+    data_files = get_all_data_files(data_source)
     if not data_files:
-        return False, f"No data files found in {data_source_path}"
+        return False, f"No data files found in data/{data_source}/"
 
     # Validate
-    is_valid, results = validate_partitions(partitions, data_files, data_source_path)
+    is_valid, results = validate_partitions(partitions, data_files, data_source)
     
     if is_valid:
         return True, "All partitions valid"

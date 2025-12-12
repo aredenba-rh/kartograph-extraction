@@ -22,13 +22,13 @@ help:
 	@echo "=== KG Extraction Workflow ==="
 	@echo "  make extraction-preview  - Preview data, flags, and checklist status"
 	@echo "  make start-extraction    - Start the KG extraction workflow (with Claude SDK)"
-	@echo "  make validate-partitions - Validate partition coverage"
+	@echo "  make validate-partitions SOURCE=<data_source> - Validate partition coverage"
 	@echo "  make view-checklist      - View master checklist (use CHECKLIST=<id> for specific)"
 	@echo "  make check-item          - Check off checklist item (CHECKLIST=<id> ITEM=<item_id>)"
 	@echo ""
 	@echo "=== Partition Management ==="
-	@echo "  make create-partition    - Create a new partition (TITLE='...' DESC='...' PATHS='path1 path2')"
-	@echo "  make list-partitions     - List all existing partitions"
+	@echo "  make create-partition SOURCE=<data_source> TITLE='...' DESC='...' PATHS='path1 path2'"
+	@echo "  make list-partitions     - List all existing file subsets"
 	@echo "  make clean-partitions    - Remove all partition files"
 	@echo "  make view-examples       - View example partition structure"
 	@echo ""
@@ -136,10 +136,15 @@ start-extraction:
 	@echo ""
 	@python3 -m workflow.start_extraction
 
-# Validate that partitions cover all files
+# Validate that partitions cover all files for a data source
 validate-partitions:
-	@echo "Validating partition coverage..."
-	@python3 scripts/confirm_acceptable_partition.py
+	@if [ -z "$(SOURCE)" ]; then \
+		echo "Usage: make validate-partitions SOURCE=<data_source>"; \
+		echo "Example: make validate-partitions SOURCE=openshift-docs"; \
+		exit 1; \
+	fi
+	@echo "Validating partition coverage for $(SOURCE)..."
+	@python3 scripts/validate_partition.py $(SOURCE)
 
 # View checklist (default: master_checklist)
 view-checklist:
@@ -183,33 +188,40 @@ update-ontology:
 # Partition Management Targets
 # ============================================================================
 
-# Create a new partition manually
+# Create a new file subset manually
 create-partition:
-	@if [ -z "$(TITLE)" ] || [ -z "$(DESC)" ] || [ -z "$(PATHS)" ]; then \
-		echo "Usage: make create-partition TITLE='...' DESC='...' PATHS='path1 path2 ...'"; \
-		echo "Example: make create-partition TITLE='AWS Docs' DESC='AWS integration files' PATHS='data/rosa-kcs/aws/'"; \
+	@if [ -z "$(SOURCE)" ] || [ -z "$(TITLE)" ] || [ -z "$(DESC)" ] || [ -z "$(PATHS)" ]; then \
+		echo "Usage: make create-partition SOURCE=<data_source> TITLE='...' DESC='...' PATHS='path1 path2 ...'"; \
+		echo "Example: make create-partition SOURCE=openshift-docs TITLE='AWS Docs' DESC='AWS integration files' PATHS='aws/'"; \
 		exit 1; \
 	fi
-	@python3 scripts/create_partition.py "$(TITLE)" "$(DESC)" $(PATHS)
+	@python3 scripts/create_file_subset.py "$(SOURCE)" "$(TITLE)" "$(DESC)" $(PATHS)
 
-# List all existing partitions
+# List all existing file subsets
 list-partitions:
-	@echo "Existing partitions:"
-	@if [ -d "partitions" ] && [ -n "$$(ls -A partitions/*.json 2>/dev/null)" ]; then \
-		for file in partitions/*.json; do \
-			echo ""; \
-			echo "📋 $$(basename $$file)"; \
-			python3 -c "import json; f=open('$$file'); d=json.load(f); print(f\"   ID: {d.get('partition_id')}\"); print(f\"   Title: {d.get('title')}\"); print(f\"   Files: {len(d.get('paths', []))}\")"; \
+	@echo "Existing file subsets:"
+	@if [ -d "partitions" ]; then \
+		for source_dir in partitions/*/; do \
+			if [ -d "$$source_dir" ]; then \
+				echo ""; \
+				echo "📁 $$(basename $$source_dir)/"; \
+				for file in $$source_dir*.json 2>/dev/null; do \
+					if [ -f "$$file" ]; then \
+						echo "  📋 $$(basename $$file)"; \
+						python3 -c "import json; f=open('$$file'); d=json.load(f); print(f\"     ID: {d.get('partition_id')}\"); print(f\"     Title: {d.get('title')}\"); print(f\"     Paths: {len(d.get('paths', []))}\")"; \
+					fi; \
+				done; \
+			fi; \
 		done; \
 	else \
-		echo "No partitions found in partitions/ directory"; \
+		echo "No partitions directory found"; \
 	fi
 
 # Clean all partitions
 clean-partitions:
 	@echo "Removing all partitions..."
-	@rm -f partitions/partition_*.json
-	@echo "✓ Cleaned all partition files"
+	@rm -rf partitions/*/
+	@echo "✓ Cleaned all partition folders"
 
 # View example partition structure
 view-examples:

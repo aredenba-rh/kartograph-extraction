@@ -8,11 +8,12 @@ Provides functions for:
 """
 
 import json
+import shutil
 from pathlib import Path
 
 
 def reset_partitions_folder():
-    """Remove all partition JSON files from partitions/ folder"""
+    """Remove all partition subfolders and file subsets from partitions/ folder"""
     partitions_dir = Path("partitions")
     
     if not partitions_dir.exists():
@@ -20,28 +21,35 @@ def reset_partitions_folder():
         print(f"  ✓ Created partitions/ directory")
         return
     
-    # Remove all partition JSON files
-    partition_files = list(partitions_dir.glob("partition_*.json"))
+    # Remove all data source subdirectories (e.g., partitions/openshift-docs/)
+    subdirs = [d for d in partitions_dir.iterdir() if d.is_dir()]
     
-    if partition_files:
-        for partition_file in partition_files:
-            partition_file.unlink()
-        print(f"  ✓ Removed {len(partition_files)} existing partition file(s)")
+    if subdirs:
+        for subdir in subdirs:
+            shutil.rmtree(subdir)
+        print(f"  ✓ Removed {len(subdirs)} existing partition folder(s)")
     else:
         print(f"  ✓ Partitions folder already empty")
 
 
 def reset_logging():
-    """Reset the logging.json file to start fresh"""
+    """Reset the logging/step_1/ directory to start fresh"""
     log_dir = Path("logging")
-    log_dir.mkdir(exist_ok=True)
-    log_file = log_dir / "logging.json"
+    step_1_dir = log_dir / "step_1"
     
-    # Overwrite with empty JSON object
+    # Remove the entire step_1 directory if it exists
+    if step_1_dir.exists():
+        shutil.rmtree(step_1_dir)
+    
+    # Create fresh step_1 directory
+    step_1_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Create empty logging.json
+    log_file = step_1_dir / "logging.json"
     with open(log_file, 'w') as f:
         json.dump({}, f, indent=2, ensure_ascii=False)
     
-    print(f"  ✓ Reset logging file")
+    print(f"  ✓ Reset logging/step_1/ directory")
 
 
 def reset_ontologies_folder():

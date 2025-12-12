@@ -13,17 +13,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+# Step 1 logging directory
+STEP_1_LOG_DIR = Path("logging/step_1")
+
 
 def log_to_file(key: str, value):
     """
-    Log a key-value pair to logging/logging.json
+    Log a key-value pair to logging/step_1/logging.json
     
     Args:
         key: The log entry key
         value: The log entry value (can be string or dict/list)
     """
-    log_dir = Path("logging")
-    log_dir.mkdir(exist_ok=True)
+    log_dir = STEP_1_LOG_DIR
+    log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "logging.json"
     
     # Load existing logs or create new dict
@@ -46,19 +49,19 @@ def log_to_file(key: str, value):
         json.dump(logs, f, indent=2, ensure_ascii=False)
 
 
-def log_prompt_to_file(prompt_name: str, prompt_content: str):
+def log_prompt_to_file(data_source: str, prompt_content: str):
     """
     Log a prompt to a separate text file for better readability.
     
     Args:
-        prompt_name: Name of the prompt (used as filename)
+        data_source: Name of the data source (used in filename)
         prompt_content: The actual prompt text content
     """
-    log_dir = Path("logging")
-    log_dir.mkdir(exist_ok=True)
+    log_dir = STEP_1_LOG_DIR
+    log_dir.mkdir(parents=True, exist_ok=True)
     
-    # Create filename from prompt name
-    prompt_file = log_dir / f"{prompt_name}.txt"
+    # Create filename with data source name
+    prompt_file = log_dir / f"file_partition_{data_source}_prompt.txt"
     
     # Write prompt as plain text with actual newlines
     with open(prompt_file, 'w', encoding='utf-8') as f:
@@ -82,8 +85,8 @@ def log_message(step_name: str, attempt_num: int, message_num: int, message, mes
         message_type: Type of message (AssistantMessage, ToolUseBlock, ToolResultBlock, TextBlock, ResultMessage, etc.)
         processed_message_ids: Set of message IDs already processed for token tracking
     """
-    log_dir = Path("logging")
-    log_dir.mkdir(exist_ok=True)
+    log_dir = STEP_1_LOG_DIR
+    log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "logging.json"
     
     # Load existing logs
@@ -209,7 +212,7 @@ def finalize_attempt_log(step_name: str, attempt_num: int, validation_result: st
         validation_result: "success" or "failed"
         validation_errors: Error message if validation failed
     """
-    log_dir = Path("logging")
+    log_dir = STEP_1_LOG_DIR
     log_file = log_dir / "logging.json"
     
     if not log_file.exists():
@@ -294,7 +297,7 @@ def print_usage_summary(step_name: str):
     Args:
         step_name: Name of the workflow step
     """
-    log_file = Path("logging") / "logging.json"
+    log_file = STEP_1_LOG_DIR / "logging.json"
     
     if not log_file.exists():
         return

@@ -8,8 +8,8 @@
       "description": "Analyze data/ folder structure, identify logical groupings, and create partition JSON files with titles and descriptions",
       "completed": false,
       "special_commands": [
-        "python3 scripts/create_partition.py",
-        "make validate-partitions"
+        "python scripts/create_file_subset.py",
+        "python scripts/validate_partition.py"
       ]
     }
   ]
