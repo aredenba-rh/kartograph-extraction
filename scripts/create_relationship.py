@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
 Create Relationship Script
-Adds a new relationship to a partition's relationship ontology file.
+Adds a new relationship to the master relationship ontology file.
 
 Usage:
-    python scripts/create_relationship.py <partition_number> <type> <source_entity_type> \\
+    python scripts/create_relationship.py <type> <source_entity_type> \\
         <target_entity_type> <description> <example_file> <example_in_file>
 
 Example:
-    python scripts/create_relationship.py 1 "DOCUMENTS" "KCS Article" "Red Hat Product" \\
+    python scripts/create_relationship.py "DOCUMENTS" "KCS Article" "Red Hat Product" \\
         "Indicates that a KCS Article documents troubleshooting steps for a Red Hat Product" \\
         "data/rosa-kcs/kcs_solutions/example.md" \\
         "KCS 5682881 -> DOCUMENTS -> Openshift Container Platform 4"
 
-The relationship will be added to ontologies/partition_01_relationship_ontology.json
+The relationship will be added to ontology/master_relationship_ontology.json
 """
 
 import json
@@ -21,10 +21,9 @@ import sys
 from pathlib import Path
 
 
-def load_relationship_ontology(partition_number: int) -> dict:
-    """Load the relationship ontology for a partition."""
-    filename = f"partition_{partition_number:02d}_relationship_ontology.json"
-    ontology_path = Path("ontologies") / filename
+def load_relationship_ontology() -> dict:
+    """Load the master relationship ontology."""
+    ontology_path = Path("ontology") / "master_relationship_ontology.json"
     
     if not ontology_path.exists():
         print(f"❌ Relationship ontology not found: {ontology_path}")
@@ -35,10 +34,9 @@ def load_relationship_ontology(partition_number: int) -> dict:
         return json.load(f)
 
 
-def save_relationship_ontology(partition_number: int, ontology_data: dict):
-    """Save the relationship ontology for a partition."""
-    filename = f"partition_{partition_number:02d}_relationship_ontology.json"
-    ontology_path = Path("ontologies") / filename
+def save_relationship_ontology(ontology_data: dict):
+    """Save the master relationship ontology."""
+    ontology_path = Path("ontology") / "master_relationship_ontology.json"
     
     with open(ontology_path, 'w') as f:
         json.dump(ontology_data, f, indent=2)
@@ -83,14 +81,13 @@ def relationship_exists(relationships: list, relationship_type: str,
     return False
 
 
-def create_relationship(partition_number: int, relationship_type: str, 
+def create_relationship(relationship_type: str, 
                        source_entity_type: str, target_entity_type: str,
                        description: str, example_file: str, example_in_file: str) -> dict:
     """
-    Create a new relationship in the partition's relationship ontology.
+    Create a new relationship in the master relationship ontology.
     
     Args:
-        partition_number: The partition number (1-6)
         relationship_type: Type of relationship (e.g., "DOCUMENTS", "RESOLVES")
         source_entity_type: The source entity type in the relationship
         target_entity_type: The target entity type in the relationship
@@ -101,13 +98,13 @@ def create_relationship(partition_number: int, relationship_type: str,
     Returns:
         The created relationship object
     """
-    ontology = load_relationship_ontology(partition_number)
+    ontology = load_relationship_ontology()
     relationships = ontology.get("relationships", [])
     
     # Check for duplicates
     if relationship_exists(relationships, relationship_type, source_entity_type, target_entity_type):
         print(f"⚠️  Relationship '{relationship_type}' ({source_entity_type} -> {target_entity_type})")
-        print(f"   already exists in partition {partition_number}. Skipping duplicate.")
+        print(f"   already exists in master ontology. Skipping duplicate.")
         # Find and return the existing relationship
         for rel in relationships:
             if (rel.get("type", "").lower() == relationship_type.lower() and
@@ -134,9 +131,9 @@ def create_relationship(partition_number: int, relationship_type: str,
     ontology["relationships"] = relationships
     
     # Save updated ontology
-    save_relationship_ontology(partition_number, ontology)
+    save_relationship_ontology(ontology)
     
-    print(f"✅ Created relationship in partition {partition_number}:")
+    print(f"✅ Created relationship in master ontology:")
     print(f"   ID: {relationship_id}")
     print(f"   Type: {relationship_type}")
     print(f"   {source_entity_type} -> {target_entity_type}")
@@ -146,12 +143,11 @@ def create_relationship(partition_number: int, relationship_type: str,
 
 def main():
     """Command-line interface for creating relationships."""
-    if len(sys.argv) < 8:
-        print("Usage: python scripts/create_relationship.py <partition_number> <type> \\")
+    if len(sys.argv) < 7:
+        print("Usage: python scripts/create_relationship.py <type> \\")
         print("       <source_entity_type> <target_entity_type> <description> \\")
         print("       <example_file> <example_in_file>")
         print("\nArguments:")
-        print("  partition_number    - The partition number (e.g., 1, 2, 3)")
         print("  type                - Relationship type (e.g., 'DOCUMENTS', 'RESOLVES')")
         print("  source_entity_type  - The source entity type")
         print("  target_entity_type  - The target entity type")
@@ -159,28 +155,22 @@ def main():
         print("  example_file        - Path to a file containing an example")
         print("  example_in_file     - Example showing how the relationship appears")
         print("\nExample:")
-        print('  python scripts/create_relationship.py 1 "DOCUMENTS" "KCS Article" \\')
+        print('  python scripts/create_relationship.py "DOCUMENTS" "KCS Article" \\')
         print('    "Red Hat Product" "KCS Article documents troubleshooting for a product" \\')
         print('    "data/rosa-kcs/kcs_solutions/example.md" \\')
         print('    "KCS 5682881 -> DOCUMENTS -> Openshift Container Platform 4"')
         sys.exit(1)
     
-    try:
-        partition_number = int(sys.argv[1])
-    except ValueError:
-        print(f"❌ Invalid partition number: {sys.argv[1]}")
-        sys.exit(1)
-    
-    relationship_type = sys.argv[2]
-    source_entity_type = sys.argv[3]
-    target_entity_type = sys.argv[4]
-    description = sys.argv[5]
-    example_file = sys.argv[6]
-    example_in_file = sys.argv[7]
+    relationship_type = sys.argv[1]
+    source_entity_type = sys.argv[2]
+    target_entity_type = sys.argv[3]
+    description = sys.argv[4]
+    example_file = sys.argv[5]
+    example_in_file = sys.argv[6]
     
     try:
         relationship = create_relationship(
-            partition_number, relationship_type, source_entity_type,
+            relationship_type, source_entity_type,
             target_entity_type, description, example_file, example_in_file
         )
         print(f"\n📋 Relationship created successfully!")
@@ -193,4 +183,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

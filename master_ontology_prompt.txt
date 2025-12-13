@@ -5,8 +5,8 @@ I'm building a Knowledge Graph from technical documentation repositories in the 
 **Master Ontology Creation**
 - Scope: All data sources in `data/` folder
 - Output files:
-  - `ontologies/master_entity_ontology.json`
-  - `ontologies/master_relationship_ontology.json`
+  - `ontology/master_entity_ontology.json`
+  - `ontology/master_relationship_ontology.json`
 - Goal: Define entity and relationship types at the optimal abstraction level for AI-assisted question answering
 
 ## Success Pattern (Follow These Steps)

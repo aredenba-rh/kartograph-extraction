@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
 Create Entity Script
-Adds a new entity to a partition's entity ontology file.
+Adds a new entity to the master entity ontology file.
 
 Usage:
-    python scripts/create_entity.py <partition_number> <type> <description> <example_file> <example_in_file>
+    python scripts/create_entity.py <type> <description> <example_file> <example_in_file>
 
 Example:
-    python scripts/create_entity.py 1 "Red Hat Product" "A Red Hat product involved in the KCS article" \\
+    python scripts/create_entity.py "Red Hat Product" "A Red Hat product involved in the KCS article" \\
         "data/rosa-kcs/kcs_solutions/example.md" "Openshift Container Platform 4"
 
-The entity will be added to ontologies/partition_01_entity_ontology.json
+The entity will be added to ontology/master_entity_ontology.json
 """
 
 import json
@@ -18,10 +18,9 @@ import sys
 from pathlib import Path
 
 
-def load_entity_ontology(partition_number: int) -> dict:
-    """Load the entity ontology for a partition."""
-    filename = f"partition_{partition_number:02d}_entity_ontology.json"
-    ontology_path = Path("ontologies") / filename
+def load_entity_ontology() -> dict:
+    """Load the master entity ontology."""
+    ontology_path = Path("ontology") / "master_entity_ontology.json"
     
     if not ontology_path.exists():
         print(f"❌ Entity ontology not found: {ontology_path}")
@@ -32,10 +31,9 @@ def load_entity_ontology(partition_number: int) -> dict:
         return json.load(f)
 
 
-def save_entity_ontology(partition_number: int, ontology_data: dict):
-    """Save the entity ontology for a partition."""
-    filename = f"partition_{partition_number:02d}_entity_ontology.json"
-    ontology_path = Path("ontologies") / filename
+def save_entity_ontology(ontology_data: dict):
+    """Save the master entity ontology."""
+    ontology_path = Path("ontology") / "master_entity_ontology.json"
     
     with open(ontology_path, 'w') as f:
         json.dump(ontology_data, f, indent=2)
@@ -75,13 +73,12 @@ def entity_exists(entities: list, entity_type: str) -> bool:
     return False
 
 
-def create_entity(partition_number: int, entity_type: str, description: str, 
+def create_entity(entity_type: str, description: str, 
                   example_file: str, example_in_file: str) -> dict:
     """
-    Create a new entity in the partition's entity ontology.
+    Create a new entity in the master entity ontology.
     
     Args:
-        partition_number: The partition number (1-6)
         entity_type: Type of entity (e.g., "Red Hat Product", "KCS Article")
         description: Description of what this entity represents
         example_file: Path to an example file containing this entity
@@ -90,12 +87,12 @@ def create_entity(partition_number: int, entity_type: str, description: str,
     Returns:
         The created entity object
     """
-    ontology = load_entity_ontology(partition_number)
+    ontology = load_entity_ontology()
     entities = ontology.get("entities", [])
     
     # Check for duplicates
     if entity_exists(entities, entity_type):
-        print(f"⚠️  Entity type '{entity_type}' already exists in partition {partition_number}")
+        print(f"⚠️  Entity type '{entity_type}' already exists in master ontology")
         print(f"   Skipping duplicate entity creation.")
         # Find and return the existing entity
         for entity in entities:
@@ -119,9 +116,9 @@ def create_entity(partition_number: int, entity_type: str, description: str,
     ontology["entities"] = entities
     
     # Save updated ontology
-    save_entity_ontology(partition_number, ontology)
+    save_entity_ontology(ontology)
     
-    print(f"✅ Created entity in partition {partition_number}:")
+    print(f"✅ Created entity in master ontology:")
     print(f"   ID: {entity_id}")
     print(f"   Type: {entity_type}")
     print(f"   Description: {description[:60]}...")
@@ -131,34 +128,27 @@ def create_entity(partition_number: int, entity_type: str, description: str,
 
 def main():
     """Command-line interface for creating entities."""
-    if len(sys.argv) < 6:
-        print("Usage: python scripts/create_entity.py <partition_number> <type> <description> <example_file> <example_in_file>")
+    if len(sys.argv) < 5:
+        print("Usage: python scripts/create_entity.py <type> <description> <example_file> <example_in_file>")
         print("\nArguments:")
-        print("  partition_number  - The partition number (e.g., 1, 2, 3)")
         print("  type              - Entity type (e.g., 'Red Hat Product', 'KCS Article')")
         print("  description       - Description of what this entity represents")
         print("  example_file      - Path to a file containing an example of this entity")
         print("  example_in_file   - Example text showing how this entity appears")
         print("\nExample:")
-        print('  python scripts/create_entity.py 1 "Red Hat Product" \\')
+        print('  python scripts/create_entity.py "Red Hat Product" \\')
         print('    "A Red Hat product involved in the KCS article" \\')
         print('    "data/rosa-kcs/kcs_solutions/example.md" \\')
         print('    "Openshift Container Platform 4"')
         sys.exit(1)
     
-    try:
-        partition_number = int(sys.argv[1])
-    except ValueError:
-        print(f"❌ Invalid partition number: {sys.argv[1]}")
-        sys.exit(1)
-    
-    entity_type = sys.argv[2]
-    description = sys.argv[3]
-    example_file = sys.argv[4]
-    example_in_file = sys.argv[5]
+    entity_type = sys.argv[1]
+    description = sys.argv[2]
+    example_file = sys.argv[3]
+    example_in_file = sys.argv[4]
     
     try:
-        entity = create_entity(partition_number, entity_type, description, example_file, example_in_file)
+        entity = create_entity(entity_type, description, example_file, example_in_file)
         print(f"\n📋 Entity created successfully!")
         print(json.dumps(entity, indent=2))
         sys.exit(0)
@@ -169,4 +159,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -4,7 +4,7 @@ Filesystem utilities for the extraction workflow.
 Provides functions for:
 - Resetting the partitions folder
 - Resetting the logging file
-- Resetting the ontologies folder
+- Resetting the ontology folder
 """
 
 import json
@@ -52,24 +52,28 @@ def reset_logging():
     print(f"  ✓ Reset logging/step_1/ directory")
 
 
-def reset_ontologies_folder():
-    """Remove all ontology JSON files from ontologies/ folder"""
-    ontologies_dir = Path("ontologies")
+def reset_ontology_folder():
+    """Remove all ontology JSON files from ontology/ folder"""
+    ontology_dir = Path("ontology")
     
-    if not ontologies_dir.exists():
-        ontologies_dir.mkdir(parents=True, exist_ok=True)
-        print(f"  ✓ Created ontologies/ directory")
+    if not ontology_dir.exists():
+        ontology_dir.mkdir(parents=True, exist_ok=True)
+        print(f"  ✓ Created ontology/ directory")
         return
     
-    # Remove all partition ontology JSON files
-    entity_files = list(ontologies_dir.glob("partition_*_entity_ontology.json"))
-    relationship_files = list(ontologies_dir.glob("partition_*_relationship_ontology.json"))
-    all_files = entity_files + relationship_files
+    # Remove master ontology files
+    master_files = [
+        ontology_dir / "master_entity_ontology.json",
+        ontology_dir / "master_relationship_ontology.json"
+    ]
     
-    if all_files:
-        for ontology_file in all_files:
+    removed_count = 0
+    for ontology_file in master_files:
+        if ontology_file.exists():
             ontology_file.unlink()
-        print(f"  ✓ Removed {len(all_files)} existing ontology file(s)")
+            removed_count += 1
+    
+    if removed_count:
+        print(f"  ✓ Removed {removed_count} existing ontology file(s)")
     else:
-        print(f"  ✓ Ontologies folder already empty")
-
+        print(f"  ✓ Ontology folder already empty")

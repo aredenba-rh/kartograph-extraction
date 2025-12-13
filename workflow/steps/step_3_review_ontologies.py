@@ -2,9 +2,9 @@
 Step 3: Create Ontologies for Each Partition
 
 This module handles the ontology creation workflow step, which:
-1. Resets the ontologies/ folder (removes existing ontology files)
+1. Resets the ontology/ folder (removes existing ontology files)
 2. Generates the checklist dynamically from partitions
-3. Initializes empty ontology files for each partition
+3. Initializes empty master ontology files
 4. Spawns one Claude agent per partition to create ontologies
 5. Waits for all agents to complete
 """
@@ -17,7 +17,7 @@ from typing import Dict, List
 from ..helpers.logging import print_usage_summary
 from ..helpers.config import get_data_source_path
 from ..helpers.checklist import load_checklist, save_checklist
-from ..helpers.filesystem import reset_ontologies_folder
+from ..helpers.filesystem import reset_ontology_folder
 from ..agents.ontology_agent import run_ontology_agent
 
 
@@ -112,46 +112,32 @@ def generate_ontology_checklist(partitions: List[Dict], data_source_path: str) -
     return checklist
 
 
-def init_partition_ontologies(partitions: List[Dict]) -> int:
+def init_master_ontologies() -> bool:
     """
-    Initialize empty ontology files for each partition.
+    Initialize empty master ontology files.
     
-    Args:
-        partitions: List of partition data dictionaries
-        
     Returns:
-        Number of ontology file pairs created
+        True if files were created successfully
     """
-    ontologies_dir = Path("ontologies")
-    ontologies_dir.mkdir(parents=True, exist_ok=True)
+    ontology_dir = Path("ontology")
+    ontology_dir.mkdir(parents=True, exist_ok=True)
     
-    created_count = 0
+    # Create master entity ontology file
+    entity_path = ontology_dir / "master_entity_ontology.json"
+    entity_ontology = {"entities": []}
     
-    for partition in partitions:
-        partition_id = partition.get("partition_id")
-        
-        # Create entity ontology file
-        entity_filename = f"partition_{partition_id:02d}_entity_ontology.json"
-        entity_path = ontologies_dir / entity_filename
-        
-        entity_ontology = {"entities": []}
-        
-        with open(entity_path, 'w') as f:
-            json.dump(entity_ontology, f, indent=2)
-        
-        # Create relationship ontology file
-        relationship_filename = f"partition_{partition_id:02d}_relationship_ontology.json"
-        relationship_path = ontologies_dir / relationship_filename
-        
-        relationship_ontology = {"relationships": []}
-        
-        with open(relationship_path, 'w') as f:
-            json.dump(relationship_ontology, f, indent=2)
-        
-        print(f"  ✓ Created ontologies for partition {partition_id}: {partition.get('title', 'Unknown')}")
-        created_count += 1
+    with open(entity_path, 'w') as f:
+        json.dump(entity_ontology, f, indent=2)
     
-    return created_count
+    # Create master relationship ontology file
+    relationship_path = ontology_dir / "master_relationship_ontology.json"
+    relationship_ontology = {"relationships": []}
+    
+    with open(relationship_path, 'w') as f:
+        json.dump(relationship_ontology, f, indent=2)
+    
+    print(f"  ✓ Created master ontology files")
+    return True
 
 
 def step_3_create_ontologies_for_each_partition() -> bool:
@@ -159,9 +145,9 @@ def step_3_create_ontologies_for_each_partition() -> bool:
     Execute step 3: Create ontologies for each partition using Claude Code Agent SDK
     
     This function:
-    1. Resets the ontologies/ folder (removes existing ontology files)
+    1. Resets the ontology/ folder (removes existing ontology files)
     2. Generates the checklist dynamically from partitions
-    3. Initializes empty ontology files for each partition
+    3. Initializes empty master ontology files
     4. Spawns one Claude agent per partition to create ontologies
     5. Waits for all agents to complete
     
@@ -188,11 +174,11 @@ def step_3_create_ontologies_for_each_partition() -> bool:
     
     print(f"  Found {len(partitions)} partitions")
     
-    # Reset ontologies folder
-    reset_ontologies_folder()
+    # Reset ontology folder
+    reset_ontology_folder()
     
-    # Initialize empty ontology files for each partition
-    init_partition_ontologies(partitions)
+    # Initialize empty master ontology files
+    init_master_ontologies()
     
     # Generate the checklist dynamically
     checklist = generate_ontology_checklist(partitions, data_source_path)
@@ -272,15 +258,14 @@ def step_3_create_ontologies_for_each_partition() -> bool:
         print("✅ All checklist items are complete!")
         print()
     
-    # Count created ontology files
-    ontologies_dir = Path("ontologies")
-    entity_files = list(ontologies_dir.glob("partition_*_entity_ontology.json"))
-    relationship_files = list(ontologies_dir.glob("partition_*_relationship_ontology.json"))
+    # Check master ontology files
+    ontology_dir = Path("ontology")
+    entity_file = ontology_dir / "master_entity_ontology.json"
+    relationship_file = ontology_dir / "master_relationship_ontology.json"
     
-    print(f"📊 Ontology Files Created:")
-    print(f"   Entity ontologies: {len(entity_files)}")
-    print(f"   Relationship ontologies: {len(relationship_files)}")
-    print(f"   Total: {len(entity_files) + len(relationship_files)}")
+    print(f"📊 Master Ontology Files:")
+    print(f"   Entity ontology: {'✓' if entity_file.exists() else '✗'} {entity_file}")
+    print(f"   Relationship ontology: {'✓' if relationship_file.exists() else '✗'} {relationship_file}")
     print()
     
     if all_success and not incomplete_items:
@@ -291,4 +276,3 @@ def step_3_create_ontologies_for_each_partition() -> bool:
         print("⚠️  Step 3 completed with some issues.")
         print("Review the results and incomplete items above.")
         return all_success
-

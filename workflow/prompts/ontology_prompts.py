@@ -46,11 +46,11 @@ def build_ontology_creation_prompt(partition: Dict, data_source_path: str, item_
 2. **Analyze Files**: Read several representative files to understand the content, entities, and relationships present
 3. **Create Entity Ontology**: For each distinct entity TYPE you identify, run:
    ```bash
-   python scripts/create_entity.py {partition_id} "<entity_type>" "<description>" "<example_file>" "<example_in_file>"
+   python scripts/create_entity.py "<entity_type>" "<description>" "<example_file>" "<example_in_file>"
    ```
 4. **Create Relationship Ontology**: For each distinct relationship TYPE you identify, run:
    ```bash
-   python scripts/create_relationship.py {partition_id} "<type>" "<source_entity_type>" "<target_entity_type>" "<description>" "<example_file>" "<example_in_file>"
+   python scripts/create_relationship.py "<type>" "<source_entity_type>" "<target_entity_type>" "<description>" "<example_file>" "<example_in_file>"
    ```
 5. **Mark Subtask Complete**: After creating ALL entities and relationships for the partition:
    ```bash
@@ -108,11 +108,11 @@ Create a **COMPLETE** entity and relationship ontology for this partition that:
 ## Available Commands
 
 ```bash
-# Create an entity in partition {partition_id}'s ontology
-python scripts/create_entity.py {partition_id} "<type>" "<description>" "<example_file>" "<example_in_file>"
+# Create an entity in the master ontology
+python scripts/create_entity.py "<type>" "<description>" "<example_file>" "<example_in_file>"
 
-# Create a relationship in partition {partition_id}'s ontology  
-python scripts/create_relationship.py {partition_id} "<type>" "<source_entity_type>" "<target_entity_type>" "<description>" "<example_file>" "<example_in_file>"
+# Create a relationship in the master ontology  
+python scripts/create_relationship.py "<type>" "<source_entity_type>" "<target_entity_type>" "<description>" "<example_file>" "<example_in_file>"
 
 # Mark a subtask as complete
 python scripts/mark_subtask.py {item_id} <subtask_item_id>
@@ -121,10 +121,10 @@ python scripts/mark_subtask.py {item_id} <subtask_item_id>
 python scripts/all_subtasks_done.py {item_id}
 
 # View current entity ontology
-cat ontologies/partition_{partition_id:02d}_entity_ontology.json
+cat ontology/master_entity_ontology.json
 
 # View current relationship ontology
-cat ontologies/partition_{partition_id:02d}_relationship_ontology.json
+cat ontology/master_relationship_ontology.json
 ```
 
 
@@ -135,4 +135,3 @@ Your PARTITION_ITEM_ID is set to `{item_id}`. This allows scripts to know which 
 Begin by reading the partition file and a few representative data files to understand the content.
 """
     return prompt
-
