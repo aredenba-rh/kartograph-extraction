@@ -37,7 +37,7 @@ from .helpers import (
 )
 from .steps import (
     step_1_create_file_partitions,
-    step_2_create_ontologies_for_each_partition,
+    step_3_create_ontologies_for_each_partition,
 )
 
 
@@ -53,7 +53,7 @@ def show_workflow_status(config: Dict):
     # Flag display names and their corresponding step numbers
     flag_info = {
         "use_current_partition": ("use_current_partition", "01"),
-        "use_current_ontologies": ("use_current_ontologies", "02")
+        "use_current_ontologies": ("use_current_ontologies", "03")
     }
     
     for key, value in config.items():
@@ -96,10 +96,10 @@ def main():
     
     # Determine which steps to execute (True = execute, False = skip)
     step_1 = not config.get('use_current_partition', False)
-    step_2 = not config.get('use_current_ontologies', False)
+    step_3 = not config.get('use_current_ontologies', False)
     
     # If all steps are skipped
-    if not step_1 and not step_2:
+    if not step_1 and not step_3:
         print("⚠️  All workflow steps are skipped!")
         print("Review existing partitions and ontologies, then proceed to extraction.")
         return 0
@@ -118,17 +118,17 @@ def main():
             mark_master_checklist_step_complete("step_01")
             print()
     
-    # Execute Step 2: Create ontologies for each partition
-    if step_2:
-        print("→ Executing: Step 2 - Create ontologies for each partition")
-        success = step_2_create_ontologies_for_each_partition()
+    # Execute Step 3: Create ontologies for each partition
+    if step_3:
+        print("→ Executing: Step 3 - Create ontologies for each partition")
+        success = step_3_create_ontologies_for_each_partition()
         if not success:
             print("\n❌ Failed to create ontologies.")
             return 1
         else:
-            # Mark step_02 as complete in master checklist
+            # Mark step_03 as complete in master checklist
             print()
-            mark_master_checklist_step_complete("step_02")
+            mark_master_checklist_step_complete("step_03")
             print()
     
     return 0

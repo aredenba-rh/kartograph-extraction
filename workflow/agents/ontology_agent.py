@@ -30,14 +30,14 @@ async def run_ontology_agent(
         Tuple of (partition_id, success, error_message)
     """
     partition_id = partition.get("partition_id")
-    item_id = f"2.{partition_id}"
-    step_name = f"step_2.{partition_id}_ontology_creation"
+    item_id = f"3.{partition_id}"
+    step_name = f"step_3.{partition_id}_ontology_creation"
     
     # Build the prompt for this partition
     prompt = build_ontology_creation_prompt(partition, data_source_path, item_id)
     
     # Log the prompt
-    log_prompt_to_file(f"step_2_{partition_id}_ontology_prompt", prompt)
+    log_prompt_to_file(f"step_3_{partition_id}_ontology_prompt", prompt)
     
     # Configure Claude Agent SDK options with partition-specific environment
     options = ClaudeAgentOptions(

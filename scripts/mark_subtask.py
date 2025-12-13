@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
 Mark Subtask Complete Script
-Marks a specific subtask as complete in the 02_create_ontologies_for_each_partition checklist.
+Marks a specific subtask as complete in the 03_create_ontologies_for_each_partition checklist.
 
 Usage:
     python scripts/mark_subtask.py <subtask_item_id>
     
-The item_item_id (e.g., "2.1") is determined from the PARTITION_ITEM_ID environment variable,
+The item_item_id (e.g., "3.1") is determined from the PARTITION_ITEM_ID environment variable,
 which should be set when spawning the agent for a specific partition.
 
 Example:
-    PARTITION_ITEM_ID=2.1 python scripts/mark_subtask.py 2.1.3
+    PARTITION_ITEM_ID=3.1 python scripts/mark_subtask.py 3.1.3
 """
 
 import json
@@ -20,7 +20,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 
-CHECKLIST_ID = "02_create_ontologies_for_each_partition"
+CHECKLIST_ID = "03_create_ontologies_for_each_partition"
 
 
 def load_checklist() -> dict:
@@ -114,6 +114,8 @@ def main():
         print("   This should be set when the agent is spawned for a specific partition")
         print("\nAlternatively, you can pass both IDs:")
         print("  python scripts/mark_subtask.py <item_item_id> <subtask_item_id>")
+        print("\nExample:")
+        print("  python scripts/mark_subtask.py 3.1 3.1.3")
         
         # Allow passing both as fallback
         if len(sys.argv) >= 3:

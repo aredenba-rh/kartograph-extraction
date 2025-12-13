@@ -1,5 +1,5 @@
 """
-Step 2: Create Ontologies for Each Partition
+Step 3: Create Ontologies for Each Partition
 
 This module handles the ontology creation workflow step, which:
 1. Resets the ontologies/ folder (removes existing ontology files)
@@ -45,7 +45,7 @@ def get_all_partitions() -> List[Dict]:
 
 def generate_ontology_checklist(partitions: List[Dict], data_source_path: str) -> Dict:
     """
-    Generate the 02_create_ontologies_for_each_partition.json checklist dynamically.
+    Generate the 03_create_ontologies_for_each_partition.json checklist dynamically.
     
     Creates a checklist where each partition is an item, and each file in the partition
     is a subtask. The first subtask is always the partition JSON file itself.
@@ -58,7 +58,7 @@ def generate_ontology_checklist(partitions: List[Dict], data_source_path: str) -
         The generated checklist dictionary
     """
     checklist = {
-        "checklist_id": "02_create_ontologies_for_each_partition",
+        "checklist_id": "03_create_ontologies_for_each_partition",
         "title": "Create Ontologies for Each Partition",
         "description": "Define entity and relationship ontologies for each partition",
         "special_commands": [
@@ -75,8 +75,8 @@ def generate_ontology_checklist(partitions: List[Dict], data_source_path: str) -
         title = partition.get("title", "Unknown")
         paths = partition.get("paths", [])
         
-        # Create item ID (e.g., "2.1" for partition 1, "2.2" for partition 2)
-        item_id = f"2.{partition_id}"
+        # Create item ID (e.g., "3.1" for partition 1, "3.2" for partition 2)
+        item_id = f"3.{partition_id}"
         
         # Create the item for this partition
         item = {
@@ -154,9 +154,9 @@ def init_partition_ontologies(partitions: List[Dict]) -> int:
     return created_count
 
 
-def step_2_create_ontologies_for_each_partition() -> bool:
+def step_3_create_ontologies_for_each_partition() -> bool:
     """
-    Execute step 2: Create ontologies for each partition using Claude Code Agent SDK
+    Execute step 3: Create ontologies for each partition using Claude Code Agent SDK
     
     This function:
     1. Resets the ontologies/ folder (removes existing ontology files)
@@ -172,7 +172,7 @@ def step_2_create_ontologies_for_each_partition() -> bool:
     # RESET: Clear existing ontologies and generate checklist
     # ========================================================================
     print("\n" + "=" * 60)
-    print("PREPARING STEP 2: ONTOLOGY CREATION")
+    print("PREPARING STEP 3: ONTOLOGY CREATION")
     print("=" * 60)
     print()
     
@@ -196,7 +196,7 @@ def step_2_create_ontologies_for_each_partition() -> bool:
     
     # Generate the checklist dynamically
     checklist = generate_ontology_checklist(partitions, data_source_path)
-    save_checklist("02_create_ontologies_for_each_partition", checklist)
+    save_checklist("03_create_ontologies_for_each_partition", checklist)
     print(f"  ✓ Generated checklist with {len(checklist['items'])} items")
     
     # Count total subtasks
@@ -206,11 +206,11 @@ def step_2_create_ontologies_for_each_partition() -> bool:
     print()
     
     # ========================================================================
-    # STEP 2: Create Ontologies (spawn agent per partition)
+    # STEP 3: Create Ontologies (spawn agent per partition)
     # ========================================================================
     
     print("=" * 60)
-    print("STEP 2: Creating Ontologies for Each Partition")
+    print("STEP 3: Creating Ontologies for Each Partition")
     print("=" * 60)
     print()
     print(f"📋 Spawning {len(partitions)} agents (one per partition)")
@@ -248,7 +248,7 @@ def step_2_create_ontologies_for_each_partition() -> bool:
     print("Verifying Checklist Completion")
     print(f"{'='*60}\n")
     
-    final_checklist = load_checklist("02_create_ontologies_for_each_partition")
+    final_checklist = load_checklist("03_create_ontologies_for_each_partition")
     incomplete_items = []
     
     for item in final_checklist.get("items", []):
@@ -284,11 +284,11 @@ def step_2_create_ontologies_for_each_partition() -> bool:
     print()
     
     if all_success and not incomplete_items:
-        print("✅ STEP 2 COMPLETE!")
+        print("✅ STEP 3 COMPLETE!")
         print("All ontologies have been created for all partitions.")
         return True
     else:
-        print("⚠️  Step 2 completed with some issues.")
+        print("⚠️  Step 3 completed with some issues.")
         print("Review the results and incomplete items above.")
         return all_success
 
